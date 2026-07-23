@@ -9,6 +9,13 @@ A pylint plugin providing df12 house-style checkers:
 - `prefer-match-over-constant-chain` (R9103) — `if`/`elif` chains comparing
   one subject with constants, enum members, or literals should be a `match`
   statement over an enumeration.
+- `trivial-attribute-wrapper` (R9104) — functions with no logic beyond
+  attribute access or a proxied call should be removed or made properties.
+- `reexport-by-assignment` (C9105) — re-export with
+  `from ... import ... as ...` rather than assignment.
+- `lint-suppression-without-explanation` (C9106) and
+  `typecheck-suppression-without-explanation` (C9107) — every suppression
+  pragma must record a reason.
 
 Load the plugin with `pylint --load-plugins=df12_python_lints`, or from
 `pyproject.toml`:

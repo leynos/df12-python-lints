@@ -15,7 +15,7 @@ or from the command line:
 pylint --load-plugins=df12_python_lints my_package
 ```
 
-Loading the plugin registers three checkers.
+Loading the plugin registers seven checkers.
 
 ### `prefer-structural-pattern-matching` (R9101)
 
@@ -71,6 +71,61 @@ match colour:
 Branches that compare against variables, call results, or name-bound containers
 disqualify the chain, as do ordering comparisons, because they cannot become
 `case` patterns.
+
+### `trivial-attribute-wrapper` (R9104)
+
+Reports functions with no logic beyond forwarding: a body that only returns an
+attribute of one of the function's parameters, or calls through such an
+attribute while passing the function's own parameters along unchanged:
+
+```python
+def get_name(user):
+    return user.profile.name
+
+
+def send(self, message):
+    return self._client.send(message)
+```
+
+Access the attribute or bound method directly at the call site, or expose it as
+a property when the indirection is deliberate. Decorated functions are exempt
+because decorators such as `property` or `functools.cache` make the forwarding
+deliberate. Supplying new arguments, transforming an argument, or adding any
+further statement disqualifies the function.
+
+### `reexport-by-assignment` (C9105)
+
+Reports module-level names bound by assigning an imported name or an attribute
+reached through an imported module:
+
+```python
+import os.path
+
+join = os.path.join  # flagged
+```
+
+Use `from os.path import join` (or `import module as alias`) instead, so
+importers and type checkers see a real import binding. Call results, aliases of
+names defined in the same module, and assignments inside functions are not
+flagged.
+
+### Suppressions without explanations (C9106, C9107)
+
+Two checkers require every suppression pragma to record a reason:
+
+- `lint-suppression-without-explanation` (C9106) covers lint pragmas:
+  `noqa`, `ruff: noqa`, and `pylint: disable`.
+- `typecheck-suppression-without-explanation` (C9107) covers type-check
+  pragmas: `type: ignore`, `pyright: ignore`, `ty: ignore`, and `mypy:`.
+
+An explanation may sit after a second `#` in the same comment, as trailing
+prose in the pragma segment, or as a standalone comment on the line above:
+
+```python
+value = eval(text)  # noqa: S307  # input is a vetted config literal
+```
+
+A pragma on the preceding line does not count as an explanation.
 
 ## Quality Gates
 
