@@ -76,3 +76,24 @@ the estate-wide base from `leynos/agent-helper-scripts` only when its authority
 is newer than the ignored local cache. A populated cache supports offline
 generation. Add only project-specific terms and exclusions to
 `typos.local.toml`; never edit generated `typos.toml` by hand.
+
+## Verification tiers
+
+The test suite is layered so each adversary runs at the right cadence:
+
+- **Example tests** (`make test`) run the pytest suites, including the
+  Hypothesis property tests in `tests/test_properties.py`. The properties cover
+  the checkers' decision kernels across whole input families — chain lengths,
+  guard-run lengths, literal nesting, and generated pragma comments — and any
+  shrunk counterexample should be promoted to a named regression test beside
+  the checker's example suite.
+- **Symbolic model checks** (`make crosshair`) run CrossHair over the
+  pure selection kernels in `df12_python_lints/_chains.py`, which carry PEP 316
+  contracts (`pre:`/`post:` docstring clauses). The search is budget-bounded
+  and opt-in; run it on changes to the kernels rather than on every push.
+- **End-to-end shim tests** (part of `make test`,
+  `tests/test_e2e_shim.py`) lint fixture modules through the pinned
+  `leynos/pylint-pypy-shim` runner with the plugin loaded, proving every
+  checker fires — and stays silent on clean code — under the same PyPy-backed
+  pylint that the project's own lint gate uses. The shim ref is read from the
+  Makefile so the two cannot drift apart.
