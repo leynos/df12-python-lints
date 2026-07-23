@@ -7,6 +7,9 @@ requires-python = ">=3.12"
 license = { text = "ISC" }
 dependencies = ["pylint>=3.3"]
 
+[project.scripts]
+ambrleaks = "df12_python_lints.ambrleaks.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest",

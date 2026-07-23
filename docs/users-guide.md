@@ -127,6 +127,70 @@ value = eval(text)  # noqa: S307  # input is a vetted config literal
 
 A pragma on the preceding line does not count as an explanation.
 
+## The ambrleaks Snapshot Scanner
+
+The package also ships `ambrleaks`, a standalone scanner for syrupy
+`.ambr` snapshot files. Pylint only lints Python modules, so unredacted
+values inside snapshot files need a file-level tool. Install it as an
+opaque tool or run it from the project environment:
+
+```bash
+uv tool install df12-python-lints
+ambrleaks tests
+```
+
+The scanner walks the given paths for `.ambr` files and reports values
+that should have been redacted with a syrupy `matcher` before the
+snapshot was recorded, attributing each finding to its `# name:` test
+block. Rules follow the gitleaks model — a strict pattern, an optional
+Shannon-entropy floor, and built-in allowlists:
+
+| Rule | Detects | Default |
+| ---------------------- | -------------------------------------- | ------- |
+| `snapshot-hex` | Hex strings of 32+ characters, entropy-gated | on |
+| `snapshot-uuid` | UUID literals | on |
+| `snapshot-email` | Email addresses (RFC 2606 domains allowlisted) | on |
+| `snapshot-phone` | E.164 numbers with a leading `+` | off |
+| `snapshot-url` | `http(s)` URLs (`example.com`, loopback, and namespace URIs allowlisted) | on |
+| `snapshot-posix-path` | Absolute paths rooted in user or temp directories | on |
+| `snapshot-windows-path` | Drive-letter and UNC paths | on |
+
+Exit status is `0` for a clean tree and `1` when findings remain.
+
+### Suppressing Findings
+
+Inline markers cannot be used: syrupy rewrites `.ambr` files wholesale on
+`pytest --snapshot-update`, destroying any annotation. All suppression
+therefore lives outside the snapshot and survives regeneration:
+
+- **Configuration** — `ambrleaks.toml` (or `.ambrleaks.toml`) in the
+  working directory, or `--config PATH`:
+
+  ```toml
+  [rules.snapshot-phone]
+  enabled = true
+
+  [allowlist]
+  values = ['@realcorp\.example$']  # regexes matched against the value
+  tests = ["test_legacy_*"]         # globs matched against # name: ids
+  paths = ["tests/fixtures/*"]      # globs matched against file paths
+  ```
+
+- **Baseline** — grandfather existing findings while failing new ones:
+
+  ```bash
+  ambrleaks --write-baseline .ambrleaks-baseline.json
+  ambrleaks --baseline .ambrleaks-baseline.json
+  ```
+
+  Fingerprints hash the file path, test name, rule, and value — not the
+  line number — so a baseline survives blocks moving when snapshots are
+  regenerated.
+
+The lasting fix is redaction at record time with syrupy's
+`matcher=path_type(...)` (including its regex `replacer` idiom for
+values embedded in strings), then `pytest --snapshot-update`.
+
 ## Quality Gates
 
 Generated projects use `make all` as the standard local quality gate. It runs
