@@ -1,10 +1,17 @@
 """Checker flagging trivial wrappers with no logic of their own.
 
-A function whose whole body returns an attribute of one of its parameters,
-or calls through such an attribute while passing its own parameters along
-unchanged, adds a name and a call frame without adding behaviour. Access
-the attribute or bound method directly at the call site, or expose it as a
-property when the indirection is deliberate.
+Two shapes of forwarding add a name and a call frame without adding
+behaviour:
+
+- returning an attribute of a parameter, or calling through such an
+  attribute with the function's own parameters passed along unchanged
+  (``trivial-attribute-wrapper``); and
+- forwarding every argument unchanged to another module-level or
+  imported function (``trivial-alias-wrapper``).
+
+Access the attribute, bound method, or target function directly at the
+call site — or alias it with an import — unless the indirection is
+deliberate.
 
 Examples
 --------
@@ -16,10 +23,14 @@ Flagged::
     def send(self, message):
         return self._client.send(message)
 
+    def foo(qux):
+        return bar(qux)
+
 Preferred::
 
-    user.profile.name          # at the call site
+    user.profile.name           # at the call site
     self._client.send(message)  # at the call site
+    from mymodule import bar as foo
 """
 
 from __future__ import annotations
@@ -47,6 +58,17 @@ _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
             "Access the attribute or bound method directly at the call "
             "site, or expose it as a property when the indirection is "
             "required."
+        ),
+    ),
+    "R9110": (
+        "Function %r only forwards its arguments to %r",
+        "trivial-alias-wrapper",
+        (
+            "Emitted when a function body does nothing but call another "
+            "module-level or imported function with its own parameters "
+            "passed along unchanged. Call the target directly, or alias "
+            "it with 'from module import target as name' when a "
+            "different name is wanted."
         ),
     ),
 }
@@ -134,6 +156,73 @@ def _proxy_root(
             return None
 
 
+def _aliased_call(statement: nodes.NodeNG) -> nodes.Call | None:
+    """Return the bare-name call *statement* forwards to, if any.
+
+    Examples
+    --------
+    ``return bar(qux)`` returns the call node; ``return obj.bar(qux)``
+    returns ``None`` because the target is an attribute chain.
+    """
+    match statement:
+        case (
+            nodes.Return(value=nodes.Call(func=nodes.Name()) as call)
+            | nodes.Expr(value=nodes.Call(func=nodes.Name()) as call)
+        ):
+            return call
+        case _:
+            return None
+
+
+def _resolves_to_function(name_node: nodes.Name) -> bool:
+    """Return whether *name_node* names a module function or an import.
+
+    Parameters, local bindings, classes, and builtins do not qualify:
+    calling through a parameter is higher-order code, and wrapping a
+    class or builtin is a factory with a deliberate name.
+
+    Examples
+    --------
+    With ``def bar(...)`` at module level, a ``Name`` node for ``bar``
+    reports ``True``; a ``Name`` node for ``str`` reports ``False``.
+    """
+    _, assignments = name_node.lookup(name_node.name)
+    return any(
+        (
+            isinstance(assignment, nodes.FunctionDef)
+            and isinstance(assignment.parent, nodes.Module)
+        )
+        or isinstance(assignment, nodes.Import | nodes.ImportFrom)
+        for assignment in assignments
+    )
+
+
+def _alias_target(node: nodes.FunctionDef) -> str | None:
+    """Return the function *node* merely re-invokes, if any.
+
+    Examples
+    --------
+    ``def foo(qux): return bar(qux)`` returns ``"bar"`` when ``bar`` is
+    a module-level function; ``def apply(f, x): return f(x)`` returns
+    ``None``.
+    """
+    parameter_names = frozenset(node.argnames())
+    match _body_without_docstring(node):
+        case [statement]:
+            call = _aliased_call(statement)
+        case _:
+            return None
+    if call is None or not isinstance(call.func, nodes.Name):
+        return None
+    if call.func.name in parameter_names:
+        return None
+    if not _is_passthrough_call(call, parameter_names):
+        return None
+    if not _resolves_to_function(call.func):
+        return None
+    return call.func.name
+
+
 def _forwarded_parameter(node: nodes.FunctionDef) -> str | None:
     """Return the parameter *node* merely forwards through, if any.
 
@@ -180,5 +269,11 @@ class TrivialWrapperChecker(checkers.BaseChecker):
             return
         if _forwarded_parameter(node) is not None:
             self.add_message("trivial-attribute-wrapper", node=node, args=(node.name,))
+            return
+        target = _alias_target(node)
+        if target is not None:
+            self.add_message(
+                "trivial-alias-wrapper", node=node, args=(node.name, target)
+            )
 
     visit_asyncfunctiondef = visit_functiondef

@@ -15,7 +15,7 @@ or from the command line:
 pylint --load-plugins=df12_python_lints my_package
 ```
 
-Loading the plugin registers nine checkers.
+Loading the plugin registers ten messages.
 
 ### `prefer-structural-pattern-matching` (R9101)
 
@@ -92,6 +92,23 @@ a property when the indirection is deliberate. Decorated functions are exempt
 because decorators such as `property` or `functools.cache` make the forwarding
 deliberate. Supplying new arguments, transforming an argument, or adding any
 further statement disqualifies the function.
+
+### `trivial-alias-wrapper` (R9110)
+
+Reports functions whose body only calls another module-level or imported
+function with the wrapper's own parameters forwarded unchanged:
+
+```python
+def foo(qux):
+    return bar(qux)
+```
+
+Call the target directly, or alias it with `from mymodule import bar as foo`
+when a different name is wanted. The checker only fires when the target
+resolves to a module-level function or an import: calling through a parameter
+is higher-order code, and wrapping a class constructor or a builtin is a
+factory with a deliberate name, so neither is reported. Decorated functions are
+exempt, as for R9104.
 
 ### `reexport-by-assignment` (C9105)
 

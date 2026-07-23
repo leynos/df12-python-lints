@@ -152,3 +152,111 @@ class TestTrivialWrapperChecker(testutils.CheckerTestCase):
         )
         with self.assertNoMessages():
             self.checker.visit_functiondef(node)
+
+
+def _alias_message(
+    node: astroid.nodes.FunctionDef, target: str
+) -> testutils.MessageTest:
+    """Build the expected message for an alias report on *node*."""
+    return testutils.MessageTest(
+        "trivial-alias-wrapper", node=node, args=(node.name, target)
+    )
+
+
+class TestTrivialAliasWrapper(testutils.CheckerTestCase):
+    """Exercise detection of bare-name argument-forwarding wrappers."""
+
+    CHECKER_CLASS = TrivialWrapperChecker
+
+    def test_flags_forwarding_to_module_function(self) -> None:
+        """Forwarding every argument to a module function is reported."""
+        node = _extract_function(
+            """
+            def bar(value):
+                return value * 2
+
+            def foo(qux):  #@
+                return bar(qux)
+            """
+        )
+        with self.assertAddsMessages(_alias_message(node, "bar"), ignore_position=True):
+            self.checker.visit_functiondef(node)
+
+    def test_flags_forwarding_to_imported_function(self) -> None:
+        """Forwarding to a from-imported function is reported."""
+        node = _extract_function(
+            """
+            from json import dumps
+
+            def serialize(payload):  #@
+                return dumps(payload)
+            """
+        )
+        with self.assertAddsMessages(
+            _alias_message(node, "dumps"), ignore_position=True
+        ):
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_call_through_parameter(self) -> None:
+        """A combinator calling through a parameter is higher-order code."""
+        node = _extract_function(
+            """
+            def apply(handler, value):  #@
+                return handler(value)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_class_constructor_call(self) -> None:
+        """A factory calling a class constructor keeps a deliberate name."""
+        node = _extract_function(
+            """
+            class Config:
+                pass
+
+            def make_config(source):  #@
+                return Config(source)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_builtin_call(self) -> None:
+        """Wrapping a builtin is a named conversion, not an alias."""
+        node = _extract_function(
+            """
+            def stringify(value):  #@
+                return str(value)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_transformed_arguments(self) -> None:
+        """Transforming an argument before forwarding adds behaviour."""
+        node = _extract_function(
+            """
+            def bar(value):
+                return value * 2
+
+            def foo(qux):  #@
+                return bar(qux.strip())
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_supplied_extra_argument(self) -> None:
+        """Supplying a constant argument specializes the call."""
+        node = _extract_function(
+            """
+            def bar(value, retries):
+                return (value, retries)
+
+            def foo(qux):  #@
+                return bar(qux, 3)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)

@@ -74,7 +74,7 @@ ______________________________________________________________________
 
 ## Features
 
-Nine pylint messages:
+Ten pylint messages:
 
 - `prefer-structural-pattern-matching` (R9101) — `isinstance` dispatch on
   one subject should be a `match` statement with class patterns.
@@ -83,8 +83,9 @@ Nine pylint messages:
 - `prefer-match-over-constant-chain` (R9103) — `if`/`elif` chains
   comparing one subject with constants, enum members, or literals should be a
   `match` statement over an enumeration.
-- `trivial-attribute-wrapper` (R9104) — functions with no logic beyond
-  attribute access or a proxied call add a name without adding behaviour.
+- `trivial-attribute-wrapper` (R9104) and `trivial-alias-wrapper`
+  (R9110) — functions with no logic beyond attribute access, a proxied call, or
+  forwarding to another function add a name without adding behaviour.
 - `reexport-by-assignment` (C9105) — re-export with
   `from ... import ... as ...` rather than assignment.
 - `lint-suppression-without-explanation` (C9106) and

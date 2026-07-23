@@ -10,7 +10,9 @@ The package is a pylint plugin. Loading it registers two checkers:
   chains that only compare one subject with constants, enum members, or
   literals;
 - ``trivial-attribute-wrapper`` (R9104) flags functions with no logic
-  beyond attribute access or a proxied call;
+  beyond attribute access or a proxied call, and
+  ``trivial-alias-wrapper`` (R9110) flags functions that only forward
+  their arguments to another function;
 - ``reexport-by-assignment`` (C9105) flags module-level aliases of
   imported names made by assignment rather than import; and
 - ``lint-suppression-without-explanation`` (C9106) with
