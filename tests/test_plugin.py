@@ -12,6 +12,13 @@ def test_register_adds_all_checkers() -> None:
     linter = PyLinter()
     df12_python_lints.register(linter)
     names = {checker.name for checker in linter.get_checkers()}
-    assert "df12-match-dispatch" in names, "dispatch checker must register"
-    assert "df12-assert-message" in names, "assert checker must register"
-    assert "df12-constant-chain" in names, "constant chain checker must register"
+    expected = {
+        "df12-match-dispatch",
+        "df12-assert-message",
+        "df12-constant-chain",
+        "df12-trivial-wrapper",
+        "df12-reexport-assignment",
+        "df12-suppression-comments",
+    }
+    missing = expected - names
+    assert not missing, f"checkers failed to register: {sorted(missing)}"
