@@ -95,6 +95,28 @@ class TestConstantChainChecker(testutils.CheckerTestCase):
         ):
             self.checker.visit_if(node)
 
+    def test_flags_negative_number_constants(self) -> None:
+        """Negative literals parse as unary operations but are constants.
+
+        Regression pinned from a Hypothesis counterexample: chains such
+        as ``value == -1`` were missed because ``-1`` is a ``UnaryOp``
+        node rather than a ``Const``.
+        """
+        node = _extract_if(
+            """
+            def check(value):
+                if value == 0:  #@
+                    return 1
+                elif value == -1:
+                    return 2
+                return 0
+            """
+        )
+        with self.assertAddsMessages(
+            _chain_message(node, "value"), ignore_position=True
+        ):
+            self.checker.visit_if(node)
+
     def test_flags_reversed_constant_equality(self) -> None:
         """A constant on the left-hand side still identifies the subject."""
         node = _extract_if(

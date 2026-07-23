@@ -62,11 +62,13 @@ def _is_constant_like(node: nodes.NodeNG | bases.Proxy) -> bool:
 
     Examples
     --------
-    ``"reset"``, ``Colour.RED``, and ``MAX_RETRIES`` all qualify;
-    ``config.mode`` and ``other`` do not.
+    ``"reset"``, ``-1``, ``Colour.RED``, and ``MAX_RETRIES`` all
+    qualify; ``config.mode`` and ``other`` do not.
     """
     match node:
         case nodes.Const():
+            return True
+        case nodes.UnaryOp(operand=nodes.Const()):
             return True
         case nodes.Attribute(attrname=attrname, expr=expr):
             if attrname.isupper():
