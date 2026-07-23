@@ -42,6 +42,12 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         with self.assertAddsMessages(_lint_message(1), ignore_position=True):
             self.checker.process_tokens(_tokens(code))
 
+    def test_flags_uppercase_pylint_disable(self) -> None:
+        """An uppercase pylint disable pragma without a reason is reported."""
+        code = "# PYLINT: DISABLE=too-many-branches\nx = 1\n"
+        with self.assertAddsMessages(_lint_message(1), ignore_position=True):
+            self.checker.process_tokens(_tokens(code))
+
     def test_flags_bare_type_ignore(self) -> None:
         """A type-ignore pragma without a reason is reported."""
         code = "y = obj.attr  # type: ignore[attr-defined]\n"

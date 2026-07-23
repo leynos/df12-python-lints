@@ -67,13 +67,13 @@ _NAME_LIST: typ.Final = r"[\w\-]+(?:\s*,\s*[\w\-]+)*"
 
 _DIRECTIVE_ONLY_SEGMENT: typ.Final = re.compile(
     rf"""^\s*(?:
-        (?:ruff\s*:\s*)? (?:noqa|NOQA) (?:\s*:\s*{_CODE_LIST})?
+        (?:ruff\s*:\s*)? noqa (?:\s*:\s*{_CODE_LIST})?
         | pylint\s*:\s*disable(?:-next|-line)?\s*=\s*{_NAME_LIST}
         | type\s*:\s*ignore (?:\[[\w\s,\-]*\])?
         | (?:pyright|ty)\s*:\s*ignore (?:\[[\w\s,\-]*\])?
         | mypy\s*:\s*[\w\-]+ (?:\s*=\s*"[^"]*")?
     )\s*$""",
-    re.VERBOSE,
+    re.IGNORECASE | re.VERBOSE,
 )
 
 
