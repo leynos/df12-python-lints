@@ -119,6 +119,39 @@ class TestTrivialWrapperChecker(testutils.CheckerTestCase):
         with self.assertNoMessages():
             self.checker.visit_functiondef(node)
 
+    def test_ignores_reordered_arguments(self) -> None:
+        """Reordering arguments adapts the call rather than forwarding."""
+        node = _extract_function(
+            """
+            def swap(self, first, second):  #@
+                return self._target.swap(second, first)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_repeated_argument(self) -> None:
+        """Passing one parameter twice adapts the call."""
+        node = _extract_function(
+            """
+            def pair(self, value):  #@
+                return self._target.pair(value, value)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_omitted_parameter(self) -> None:
+        """Dropping a parameter filters the call, which is behaviour."""
+        node = _extract_function(
+            """
+            def send(self, message, priority):  #@
+                return self._client.send(message)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
     def test_ignores_multi_statement_body(self) -> None:
         """More than one statement means the function does real work."""
         node = _extract_function(
@@ -217,6 +250,19 @@ class TestTrivialAliasWrapper(testutils.CheckerTestCase):
 
             def make_config(source):  #@
                 return Config(source)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)
+
+    def test_ignores_imported_class_constructor(self) -> None:
+        """An imported constructor is a factory, matching the local rule."""
+        node = _extract_function(
+            """
+            from collections import OrderedDict
+
+            def make_mapping(items):  #@
+                return OrderedDict(items)
             """
         )
         with self.assertNoMessages():

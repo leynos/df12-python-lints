@@ -91,7 +91,8 @@ Access the attribute or bound method directly at the call site, or expose it as
 a property when the indirection is deliberate. Decorated functions are exempt
 because decorators such as `property` or `functools.cache` make the forwarding
 deliberate. Supplying new arguments, transforming an argument, or adding any
-further statement disqualifies the function.
+further statement disqualifies the function, as does reordering, repeating, or
+omitting a parameter — those adapt the call, which is behaviour.
 
 ### `trivial-alias-wrapper` (R9110)
 
@@ -105,10 +106,11 @@ def foo(qux):
 
 Call the target directly, or alias it with `from mymodule import bar as foo`
 when a different name is wanted. The checker only fires when the target
-resolves to a module-level function or an import: calling through a parameter
-is higher-order code, and wrapping a class constructor or a builtin is a
-factory with a deliberate name, so neither is reported. Decorated functions are
-exempt, as for R9104.
+resolves to a module-level function, or to an import that astroid infers to a
+function: calling through a parameter is higher-order code, and wrapping a
+class constructor or a builtin — local or imported — is a factory with a
+deliberate name, so neither is reported. Decorated functions are exempt, as for
+R9104.
 
 ### `reexport-by-assignment` (C9105)
 
