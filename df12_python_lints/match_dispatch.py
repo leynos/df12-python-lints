@@ -35,6 +35,8 @@ import typing as typ
 from astroid import nodes
 from pylint import checkers
 
+from ._chains import elif_chain_tests, is_elif_branch
+
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
@@ -63,22 +65,6 @@ def _isinstance_subjects(test: nodes.NodeNG) -> frozenset[str]:
         if call.args:
             subjects.add(call.args[0].as_string())
     return frozenset(subjects)
-
-
-def _elif_chain_tests(node: nodes.If) -> list[nodes.NodeNG]:
-    """Collect the test expressions of *node* and its ``elif`` chain.
-
-    Examples
-    --------
-    For ``if a: ... elif b: ... else: ...`` the result holds the test
-    nodes for ``a`` and ``b`` in source order.
-    """
-    tests = [node.test]
-    current = node
-    while len(current.orelse) == 1 and isinstance(current.orelse[0], nodes.If):
-        current = current.orelse[0]
-        tests.append(current.test)
-    return tests
 
 
 def _repeated_subject(tests: cabc.Iterable[nodes.NodeNG]) -> str | None:
@@ -155,27 +141,15 @@ class MatchDispatchChecker(checkers.BaseChecker):
         --------
         Invoked by pylint's AST walker for every ``if`` statement.
         """
-        if self._is_elif_branch(node):
+        if is_elif_branch(node):
             return
-        subject = _repeated_subject(_elif_chain_tests(node))
+        subject = _repeated_subject(elif_chain_tests(node))
         if subject is not None:
             self.add_message(
                 "prefer-structural-pattern-matching", node=node, args=(subject,)
             )
             return
         self._check_guard_run(node)
-
-    @staticmethod
-    def _is_elif_branch(node: nodes.If) -> bool:
-        """Return whether *node* is the ``elif`` arm of an enclosing ``if``.
-
-        Examples
-        --------
-        The ``elif`` in ``if a: ... elif b: ...`` reports ``True``; the
-        head ``if`` reports ``False``.
-        """
-        parent = node.parent
-        return isinstance(parent, nodes.If) and node in parent.orelse
 
     def _check_guard_run(self, node: nodes.If) -> None:
         """Report a run of consecutive guard ``if`` statements at *node*.
