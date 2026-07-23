@@ -59,8 +59,12 @@ elif isinstance(value, list):
     handle_sequence(value)
 ```
 
-is reported as
-`R9101: Type dispatch on 'value' would be clearer as a match statement (prefer-structural-pattern-matching)`.
+is reported as:
+
+```text
+R9101: Type dispatch on 'value' would be clearer as a match statement
+(prefer-structural-pattern-matching)
+```
 
 To sweep syrupy snapshots, install the package as a tool and point `ambrleaks`
 at your tests:

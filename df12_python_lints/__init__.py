@@ -1,6 +1,7 @@
 """df12-python-lints: pylint checkers for df12 Python conventions.
 
-The package is a pylint plugin. Loading it registers two checkers:
+The package is a pylint plugin. Loading it registers seven checkers
+providing ten messages:
 
 - ``prefer-structural-pattern-matching`` (R9101) flags ``isinstance``
   dispatch chains better expressed as ``match`` statements;

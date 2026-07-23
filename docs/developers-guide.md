@@ -2,6 +2,41 @@
 
 This guide explains the contributor workflow for the generated project.
 
+## Plugin architecture
+
+Pylint discovers the plugin through `register()` in
+`df12_python_lints/__init__.py`, the entry point pylint calls when
+`load-plugins` names the package. It instantiates and registers the seven
+checkers, each defined in its own module: `MatchDispatchChecker`,
+`AssertMessageChecker`, `ConstantChainChecker`, `TrivialWrapperChecker`,
+`ReexportAssignmentChecker`, `SuppressionCommentChecker`, and
+`SnapshotAssertionChecker`. Between them they expose ten messages.
+
+Logic shared by more than one checker lives in two private helper modules:
+
+- `_chains.py` holds the traversal used by the dispatch-oriented checkers to
+  walk a head `if` statement and its `elif` chain. Its pure selection kernels
+  (`repeated_subject`, `narrowing_prefix`) carry PEP 316 `pre:`/`post:`
+  contracts so CrossHair can model-check them symbolically, separate from the
+  astroid-bound checker classes that consume them.
+- `_expressions.py` holds the attribute-chain and name-binding helpers — for
+  example resolving the base `Name` of a pure `name.attr.deeper` chain — used
+  by the wrapper and re-export checkers.
+
+`SuppressionCommentChecker` is token-based rather than AST-based: it inspects
+comment tokens to find suppression pragmas and the explanations that may
+accompany them, because a bare pragma carries no node in the abstract syntax
+tree to attach a check to.
+
+The `ambrleaks` subpackage is a separate, standalone scanner exposed as its own
+console script, split into three modules: `rules.py` pairs each detection
+pattern with an optional entropy floor and allowlists, `scanner.py` walks
+`.ambr` files line by line and attributes findings to their `# name:` test
+block, and `cli.py` provides the command-line entry point. Suppression lives in
+external configuration and baseline files rather than inline markers, because
+syrupy rewrites `.ambr` files wholesale on `--snapshot-update` and would
+destroy any annotation.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and
@@ -79,7 +114,7 @@ generation. Add only project-specific terms and exclusions to
 
 ## Verification tiers
 
-The test suite is layered so each adversary runs at the right cadence:
+The test suite is layered, so each verification tier runs at the right cadence:
 
 - **Example tests** (`make test`) run the pytest suites, including the
   Hypothesis property tests in `tests/test_properties.py`. The properties cover

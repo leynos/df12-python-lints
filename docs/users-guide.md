@@ -22,7 +22,7 @@ Loading the plugin registers ten messages.
 Reports `isinstance` dispatch on a single subject, in either of two shapes:
 
 - an `if`/`elif` chain whose branch tests call `isinstance` on the same
-  subject; or
+  subject.
 - consecutive guard `if` statements (no `else`, each body ending in
   `return`, `raise`, `continue`, or `break`) whose tests call `isinstance` on
   the same subject.
@@ -69,7 +69,7 @@ match colour:
 ```
 
 Branches that compare against variables, call results, or name-bound containers
-disqualify the chain, as do ordering comparisons, because they cannot become
+disqualify the chain, as do ordering comparisons because they cannot become
 `case` patterns.
 
 ### `trivial-attribute-wrapper` (R9104)
@@ -171,8 +171,8 @@ the AST, so reformatting a literal does not change whether it fires.
 
 The package also ships `ambrleaks`, a standalone scanner for syrupy `.ambr`
 snapshot files. Pylint only lints Python modules, so unredacted values inside
-snapshot files need a file-level tool. Install it as an opaque tool or run it
-from the project environment:
+snapshot files need a file-level tool. Install it as a standalone tool or run
+it from the project environment:
 
 ```bash
 uv tool install df12-python-lints
