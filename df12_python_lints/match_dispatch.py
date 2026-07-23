@@ -45,8 +45,6 @@ from ._chains import (
 if typ.TYPE_CHECKING:
     from pylint.typing import MessageDefinitionTuple
 
-_TERMINAL_STATEMENTS = (nodes.Return, nodes.Raise, nodes.Continue, nodes.Break)
-
 
 def _isinstance_subjects(test: nodes.NodeNG) -> frozenset[str]:
     """Return rendered first arguments of ``isinstance`` calls in *test*.
@@ -60,11 +58,9 @@ def _isinstance_subjects(test: nodes.NodeNG) -> frozenset[str]:
     """
     subjects: set[str] = set()
     for call in test.nodes_of_class(nodes.Call):
-        func = call.func
-        if not (isinstance(func, nodes.Name) and func.name == "isinstance"):
-            continue
-        if call.args:
-            subjects.add(call.args[0].as_string())
+        match call.func:
+            case nodes.Name(name="isinstance") if call.args:
+                subjects.add(call.args[0].as_string())
     return frozenset(subjects)
 
 
@@ -80,11 +76,12 @@ def _guard_subjects(stmt: nodes.NodeNG | None) -> frozenset[str]:
     ``if isinstance(x, dict): return 1`` yields ``frozenset({"x"})``; a
     guard without an ``isinstance`` test yields an empty set.
     """
-    if not isinstance(stmt, nodes.If) or stmt.orelse:
-        return frozenset()
-    if not stmt.body or not isinstance(stmt.body[-1], _TERMINAL_STATEMENTS):
-        return frozenset()
-    return _isinstance_subjects(stmt.test)
+    match stmt:
+        case nodes.If(orelse=[], body=[*_, last]) as guard:
+            match last:
+                case nodes.Return() | nodes.Raise() | nodes.Continue() | nodes.Break():
+                    return _isinstance_subjects(guard.test)
+    return frozenset()
 
 
 _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {

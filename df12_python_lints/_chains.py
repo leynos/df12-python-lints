@@ -88,9 +88,13 @@ def elif_chain_tests(node: nodes.If) -> list[nodes.NodeNG]:
     """
     tests = [node.test]
     current = node
-    while len(current.orelse) == 1 and isinstance(current.orelse[0], nodes.If):
-        current = current.orelse[0]
-        tests.append(current.test)
+    while True:
+        match current.orelse:
+            case [nodes.If() as nested]:
+                current = nested
+                tests.append(current.test)
+            case _:
+                break
     return tests
 
 
@@ -102,5 +106,8 @@ def is_elif_branch(node: nodes.If) -> bool:
     The ``elif`` in ``if a: ... elif b: ...`` reports ``True``; the head
     ``if`` reports ``False``.
     """
-    parent = node.parent
-    return isinstance(parent, nodes.If) and node in parent.orelse
+    match node.parent:
+        case nodes.If() as parent if node in parent.orelse:
+            return True
+        case _:
+            return False
