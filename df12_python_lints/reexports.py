@@ -25,7 +25,7 @@ import typing as typ
 from astroid import nodes
 from pylint import checkers
 
-from ._expressions import attribute_root
+from ._expressions import attribute_root, is_imported_name
 
 if typ.TYPE_CHECKING:
     from pylint.typing import MessageDefinitionTuple
@@ -43,24 +43,6 @@ _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
         ),
     ),
 }
-
-
-def _is_imported(name_node: nodes.Name) -> bool:
-    """Return whether *name_node* resolves to an import statement.
-
-    Examples
-    --------
-    With ``import os`` in scope, a ``Name`` node for ``os`` reports
-    ``True``; a name bound by a local ``def`` reports ``False``.
-    """
-    try:
-        _, assignments = name_node.lookup(name_node.name)
-    except AttributeError:  # pragma: no cover - defensive against odd nodes
-        return False
-    return any(
-        isinstance(assignment, nodes.Import | nodes.ImportFrom)
-        for assignment in assignments
-    )
 
 
 class ReexportAssignmentChecker(checkers.BaseChecker):
@@ -91,6 +73,6 @@ class ReexportAssignmentChecker(checkers.BaseChecker):
             case _:
                 return
         root = attribute_root(node.value)
-        if root is None or not _is_imported(root):
+        if root is None or not is_imported_name(root):
             return
         self.add_message("reexport-by-assignment", node=node, args=(target_name,))

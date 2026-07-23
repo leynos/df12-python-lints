@@ -41,7 +41,7 @@ import astroid
 from astroid import nodes
 from pylint import checkers
 
-from ._expressions import attribute_root
+from ._expressions import attribute_root, is_imported_name
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -224,13 +224,12 @@ def _resolves_to_function(name_node: nodes.Name) -> bool:
     """
     _, assignments = name_node.lookup(name_node.name)
     for assignment in assignments:
-        match assignment:
-            case nodes.FunctionDef() if isinstance(assignment.parent, nodes.Module):
-                return True
-            case nodes.Import() | nodes.ImportFrom():
-                return _import_infers_function(name_node)
-            case _:
-                continue
+        if isinstance(assignment, nodes.FunctionDef) and isinstance(
+            assignment.parent, nodes.Module
+        ):
+            return True
+    if is_imported_name(name_node):
+        return _import_infers_function(name_node)
     return False
 
 
