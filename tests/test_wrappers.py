@@ -306,3 +306,14 @@ class TestTrivialAliasWrapper(testutils.CheckerTestCase):
         )
         with self.assertNoMessages():
             self.checker.visit_functiondef(node)
+
+    def test_ignores_call_on_computed_receiver(self) -> None:
+        """A call through a computed expression has no forwarding root."""
+        node = _extract_function(
+            """
+            def combine(self, x):  #@
+                return (self.a + self.b).send(x)
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(node)

@@ -161,3 +161,43 @@ def test_report(out, err):  #@
         )
         with self.assertNoMessages():
             self.checker.visit_functiondef(func)
+
+    def test_ignores_non_comparison_assert(self) -> None:
+        """An assert without an equality comparison is not reported."""
+        node = _extract_assert(
+            """
+def test_state(flag):
+    assert flag, "flag must be set"  #@
+"""
+        )
+        with self.assertNoMessages():
+            self.checker.visit_assert(node)
+
+    def test_ignores_probes_in_helper_function(self) -> None:
+        """Substring probes in a non-test function are not reported."""
+        func = _extract_function(
+            """
+def check_report(output):  #@
+    assert "header" in output, "has header"
+    assert "row" in output, "has row"
+    assert "footer" in output, "has footer"
+"""
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(func)
+
+    def test_ignores_probes_in_nested_function(self) -> None:
+        """Probes inside a nested helper belong to that helper's frame."""
+        func = _extract_function(
+            """
+def test_outer(output):  #@
+    def helper(inner):
+        assert "a" in inner, "has a"
+        assert "b" in inner, "has b"
+        assert "c" in inner, "has c"
+
+    helper(output)
+"""
+        )
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(func)

@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import typing as typ
 
-import pytest
-
 from df12_python_lints.ambrleaks import DEFAULT_RULES, main, scan_file
 from df12_python_lints.ambrleaks.cli import (
     default_config,
@@ -17,6 +15,8 @@ from df12_python_lints.ambrleaks.cli import (
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
+
+    import pytest
 
 _HIGH_ENTROPY_HEX = "0123456789abcdef0123456789abcdef"
 
@@ -38,21 +38,6 @@ _SNAPSHOT = f"""\
   }})
 # ---
 """
-
-
-@pytest.fixture
-def write_snapshot() -> cabc.Callable[[pathlib.Path, str], pathlib.Path]:
-    """Return a factory writing snapshot content and yielding its path."""
-
-    def _write(directory: pathlib.Path, content: str) -> pathlib.Path:
-        """Write *content* as a snapshot file and return its path."""
-        snapshot_dir = directory / "__snapshots__"
-        snapshot_dir.mkdir()
-        path = snapshot_dir / "test_demo.ambr"
-        path.write_text(content, encoding="utf-8")
-        return path
-
-    return _write
 
 
 class TestScanner:

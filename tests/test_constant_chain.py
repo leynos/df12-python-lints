@@ -207,3 +207,67 @@ class TestConstantChainChecker(testutils.CheckerTestCase):
         )
         with self.assertNoMessages():
             self.checker.visit_if(node)
+
+    def test_flags_capitalized_class_attribute(self) -> None:
+        """A lowercase member of a capitalized class counts as an enum."""
+        node = _extract_if(
+            """
+            def react(mode):
+                if mode == Mode.active:  #@
+                    return 1
+                elif mode == Mode.idle:
+                    return 2
+                return 0
+            """
+        )
+        with self.assertAddsMessages(
+            _chain_message(node, "mode"), ignore_position=True
+        ):
+            self.checker.visit_if(node)
+
+    def test_flags_uppercase_name_constant(self) -> None:
+        """An upper-case module constant counts as constant-like."""
+        node = _extract_if(
+            """
+            def check(value):
+                if value == MAX_RETRIES:  #@
+                    return 1
+                elif value == 0:
+                    return 2
+                return 0
+            """
+        )
+        with self.assertAddsMessages(
+            _chain_message(node, "value"), ignore_position=True
+        ):
+            self.checker.visit_if(node)
+
+    def test_ignores_or_combination_across_subjects(self) -> None:
+        """An `or` mixing two subjects is not a single-subject chain."""
+        node = _extract_if(
+            """
+            def check(left, right):
+                if left == 1 or right == 2:  #@
+                    return 1
+                elif left == 3:
+                    return 2
+                return 0
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_if(node)
+
+    def test_ignores_non_comparison_branch(self) -> None:
+        """A branch testing a bare name is not a constant comparison."""
+        node = _extract_if(
+            """
+            def check(value, flag):
+                if value == 1:  #@
+                    return 1
+                elif flag:
+                    return 2
+                return 0
+            """
+        )
+        with self.assertNoMessages():
+            self.checker.visit_if(node)
