@@ -133,8 +133,7 @@
   - Record the decision in architecture, design, or developers-guide docs using
     `docs/contents.md` as the index.
 - **Post-commit review:** after functional changes or bug fixes that meet
-  quality
-  gates, review changed code and adjacent areas using these heuristics.
+  quality gates, review changed code and adjacent areas using these heuristics.
 - **Separate atomic refactors:** if refactoring is required, implement it in a
   separate atomic commit after the functional change and ensure it passes all
   relevant gates.
@@ -161,11 +160,9 @@
   integration contracts, persistence, command-line behaviour, network
   boundaries, user interface flows, or other system-level behaviour.
 - Use property tests with `hypothesis` or `CrossHair` when a change introduces
-  an
-  invariant over a range of inputs, states, orderings, or transitions.
+  an invariant over a range of inputs, states, orderings, or transitions.
 - Run relevant unit, behavioural, property, and end-to-end suites before and
-  after
-  each change.
+  after each change.
 
 ## Markdown guidance
 
