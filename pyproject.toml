@@ -5,7 +5,7 @@ description = "df12-python-lints package"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "ISC" }
-dependencies = []
+dependencies = ["pylint>=3.3"]
 
 [dependency-groups]
 dev = [

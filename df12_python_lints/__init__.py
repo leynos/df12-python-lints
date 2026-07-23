@@ -1,19 +1,45 @@
-"""df12-python-lints package."""
+"""df12-python-lints: pylint checkers for df12 Python conventions.
+
+The package is a pylint plugin. Loading it registers two checkers:
+
+- ``prefer-structural-pattern-matching`` (R9101) flags ``isinstance``
+  dispatch chains better expressed as ``match`` statements; and
+- ``assert-missing-message`` (C9102) flags ``assert`` statements without a
+  failure message.
+
+Examples
+--------
+Load the plugin from a pylint configuration::
+
+    [tool.pylint.main]
+    load-plugins = ["df12_python_lints"]
+
+or from the command line::
+
+    pylint --load-plugins=df12_python_lints my_package
+"""
 
 from __future__ import annotations
 
-import importlib
 import typing as typ
 
+from .assert_messages import AssertMessageChecker
+from .match_dispatch import MatchDispatchChecker
+
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+    from pylint.lint import PyLinter
 
-PACKAGE_NAME = "df12_python_lints"
+__all__ = ["AssertMessageChecker", "MatchDispatchChecker", "register"]
 
-try:  # pragma: no cover - Rust optional
-    rust = importlib.import_module(f"._{PACKAGE_NAME}_rs", package=__name__)
-    hello = typ.cast("cabc.Callable[[], str]", rust.hello)
-except ModuleNotFoundError:  # pragma: no cover - Python fallback
-    from .pure import hello
 
-__all__ = ["hello"]
+def register(linter: PyLinter) -> None:
+    """Register the df12 checkers with *linter*.
+
+    Pylint calls this entry point when the plugin loads.
+
+    Examples
+    --------
+    Invoked automatically by ``pylint --load-plugins=df12_python_lints``.
+    """
+    linter.register_checker(MatchDispatchChecker(linter))
+    linter.register_checker(AssertMessageChecker(linter))
