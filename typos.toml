@@ -146,6 +146,7 @@ extend-ignore-re = [
 "apologizers" = "apologizers"
 "apologizes" = "apologizes"
 "apologizing" = "apologizing"
+"astroid" = "astroid"
 "atomisable" = "atomizable"
 "atomisation" = "atomization"
 "atomisations" = "atomizations"

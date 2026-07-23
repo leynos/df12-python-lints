@@ -6,7 +6,10 @@ schema = 1
 stems = []
 
 [words]
-accepted = []
+accepted = [
+  # The AST library pylint is built on; not a misspelling of "asteroid".
+  "astroid",
+]
 
 [words.corrections]
 
