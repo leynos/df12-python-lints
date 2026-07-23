@@ -2,7 +2,9 @@
 
 The dispatch-oriented checkers in this package all reason about a head
 ``if`` statement and the tests along its ``elif`` chain. These helpers keep
-that traversal logic in one place.
+that traversal logic in one place. The pure selection kernels —
+:func:`repeated_subject` and :func:`narrowing_prefix` — carry PEP 316
+contracts so CrossHair can model-check them symbolically.
 
 Examples
 --------
@@ -13,7 +15,67 @@ Collect the branch tests of a chain rooted at ``node``::
 
 from __future__ import annotations
 
+import collections
+
 from astroid import nodes
+
+MIN_DISPATCH_BRANCHES = 2
+
+
+def repeated_subject(subject_sets: tuple[frozenset[str], ...]) -> str | None:
+    """Return the subject shared by at least two of *subject_sets*.
+
+    Ties break towards the most frequent, then lexically smallest,
+    subject, so the result is deterministic.
+
+    pre: len(subject_sets) <= 6
+    post: __return__ is None or sum(__return__ in s for s in subject_sets) >= 2
+
+    Examples
+    --------
+    ``[{"v"}, {"v", "n"}]`` returns ``"v"``; disjoint sets return
+    ``None``.
+    """
+    counts: collections.Counter[str] = collections.Counter()
+    for subjects in subject_sets:
+        counts.update(subjects)
+    candidates = [s for s, n in counts.items() if n >= MIN_DISPATCH_BRANCHES]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda subject: (-counts[subject], subject))
+
+
+def narrowing_prefix(
+    subject_sets: tuple[frozenset[str], ...],
+) -> tuple[int, frozenset[str]]:
+    """Return the maximal narrowing prefix of *subject_sets*.
+
+    The prefix extends while every set still shares at least one
+    subject with all sets before it; the returned pair holds the prefix
+    length and the subjects common to the whole prefix.
+
+    pre: len(subject_sets) <= 6
+    post: __return__[0] <= len(subject_sets)
+    post: all(__return__[1] <= s for s in subject_sets[: __return__[0]])
+    post: __return__[0] == 0 or len(__return__[1]) > 0
+
+    Examples
+    --------
+    ``[{"a", "b"}, {"a"}, {"c"}]`` returns ``(2, frozenset({"a"}))``.
+    """
+    # len() comparisons rather than truthiness: symbolic execution can
+    # model integer comparisons where __bool__ coercion fails.
+    if len(subject_sets) == 0 or len(subject_sets[0]) == 0:
+        return (0, frozenset())
+    common = subject_sets[0]
+    length = 1
+    for subjects in subject_sets[1:]:
+        shared = common & subjects
+        if not shared:
+            break
+        common = shared
+        length += 1
+    return (length, common)
 
 
 def elif_chain_tests(node: nodes.If) -> list[nodes.NodeNG]:

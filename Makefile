@@ -23,7 +23,7 @@ PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_P
 PYLINT = $(UV_ENV) $(UV) tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
 
 
-.PHONY: help all audit clean build build-release lint lint-python fmt check-fmt \
+.PHONY: help all audit clean build build-release crosshair lint lint-python fmt check-fmt \
         markdownlint nixie spelling test typecheck $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
@@ -124,6 +124,9 @@ nixie: ## Validate Mermaid diagrams
 
 test: build $(VENV_TOOLS) ## Run tests
 	$(UV_ENV) $(ACT_TEST_ENV) $(UV) run pytest -v -n $(PYTEST_XDIST_WORKERS)
+
+crosshair: build ## Model-check pure kernels with CrossHair
+	$(UV_ENV) RUN_CROSSHAIR=1 $(UV) run pytest -v tests/test_crosshair.py
 
 
 help: ## Show available targets

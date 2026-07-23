@@ -29,22 +29,23 @@ Preferred::
 
 from __future__ import annotations
 
-import collections
 import typing as typ
 
 from astroid import nodes
 from pylint import checkers
 
-from ._chains import elif_chain_tests, is_elif_branch
+from ._chains import (
+    MIN_DISPATCH_BRANCHES,
+    elif_chain_tests,
+    is_elif_branch,
+    narrowing_prefix,
+    repeated_subject,
+)
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
     from pylint.typing import MessageDefinitionTuple
 
 _TERMINAL_STATEMENTS = (nodes.Return, nodes.Raise, nodes.Continue, nodes.Break)
-
-_MIN_DISPATCH_BRANCHES = 2
 
 
 def _isinstance_subjects(test: nodes.NodeNG) -> frozenset[str]:
@@ -65,27 +66,6 @@ def _isinstance_subjects(test: nodes.NodeNG) -> frozenset[str]:
         if call.args:
             subjects.add(call.args[0].as_string())
     return frozenset(subjects)
-
-
-def _repeated_subject(tests: cabc.Iterable[nodes.NodeNG]) -> str | None:
-    """Return the subject dispatched on across *tests*, if any.
-
-    A subject counts as dispatched on when at least two tests contain an
-    ``isinstance`` call with it as the first argument. Ties break towards
-    the most frequent, then lexically smallest, subject for determinism.
-
-    Examples
-    --------
-    Tests for ``isinstance(v, dict)`` and ``isinstance(v, list)`` return
-    ``"v"``; unrelated tests return ``None``.
-    """
-    counts: collections.Counter[str] = collections.Counter()
-    for test in tests:
-        counts.update(_isinstance_subjects(test))
-    candidates = [s for s, n in counts.items() if n >= _MIN_DISPATCH_BRANCHES]
-    if not candidates:
-        return None
-    return min(candidates, key=lambda subject: (-counts[subject], subject))
 
 
 def _guard_subjects(stmt: nodes.NodeNG | None) -> frozenset[str]:
@@ -143,7 +123,9 @@ class MatchDispatchChecker(checkers.BaseChecker):
         """
         if is_elif_branch(node):
             return
-        subject = _repeated_subject(elif_chain_tests(node))
+        subject = repeated_subject(
+            tuple(_isinstance_subjects(test) for test in elif_chain_tests(node))
+        )
         if subject is not None:
             self.add_message(
                 "prefer-structural-pattern-matching", node=node, args=(subject,)
@@ -162,19 +144,19 @@ class MatchDispatchChecker(checkers.BaseChecker):
         Two consecutive ``if isinstance(x, ...): return ...`` statements
         produce one message on the first of them.
         """
-        common = _guard_subjects(node)
-        if not common:
+        if not _guard_subjects(node):
             return
-        if _guard_subjects(node.previous_sibling()) & common:
+        if _guard_subjects(node.previous_sibling()) & _guard_subjects(node):
             return
-        run_length = 1
+        subject_sets = [_guard_subjects(node)]
         current: nodes.NodeNG = node
-        while shared := _guard_subjects(current.next_sibling()) & common:
-            common = shared
-            run_length += 1
+        while subjects := _guard_subjects(current.next_sibling()):
+            subject_sets.append(subjects)
             current = current.next_sibling()
-        if run_length >= _MIN_DISPATCH_BRANCHES:
-            subject = min(common)
+        run_length, common = narrowing_prefix(tuple(subject_sets))
+        if run_length >= MIN_DISPATCH_BRANCHES:
             self.add_message(
-                "prefer-structural-pattern-matching", node=node, args=(subject,)
+                "prefer-structural-pattern-matching",
+                node=node,
+                args=(min(common),),
             )

@@ -20,6 +20,8 @@ dev = [
     "ty",
     "pytest-timeout",
     "pytest-xdist",
+    "hypothesis>=6",
+    "crosshair-tool",
 ]
 
 [tool.ruff]
@@ -296,6 +298,10 @@ enable = [
     "too-many-public-methods",
     "too-many-statements",
 ]
+
+[tool.crosshair]
+per_path_timeout = 4
+per_condition_timeout = 30
 
 [tool.pytest.ini_options]
 # Tests automatically killed after seconds elapsed
