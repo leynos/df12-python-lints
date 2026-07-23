@@ -15,6 +15,8 @@ from df12_python_lints.ambrleaks.cli import (
 if typ.TYPE_CHECKING:
     import pathlib
 
+    import pytest
+
 _HIGH_ENTROPY_HEX = "0123456789abcdef0123456789abcdef"
 
 _SNAPSHOT = f"""\
@@ -145,3 +147,41 @@ class TestCli:
         assert main([str(tmp_path), "--baseline", str(baseline)]) == 1, (
             "a new finding must fail despite the baseline"
         )
+
+    def test_baseline_preserves_duplicate_multiplicity(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Each baselined occurrence suppresses exactly one finding.
+
+        Fingerprints exclude line numbers, so a repeated value in one
+        block shares a fingerprint; an extra occurrence beyond the
+        baselined count must still fail the scan.
+        """
+        duplicated = (
+            "# name: test_contacts\n"
+            "  'primary': 'carol@realcorp.io'\n"
+            "  'backup': 'carol@realcorp.io'\n"
+            "# ---\n"
+        )
+        path = _write_snapshot(tmp_path, duplicated)
+        baseline = tmp_path / "baseline.json"
+        assert main([str(tmp_path), "--write-baseline", str(baseline)]) == 0, (
+            "writing a baseline must succeed"
+        )
+        fingerprints = json.loads(baseline.read_text(encoding="utf-8"))
+        assert len(fingerprints) == 2, (
+            "the baseline must record one entry per occurrence"
+        )
+        assert main([str(tmp_path), "--baseline", str(baseline)]) == 0, (
+            "an unchanged snapshot with the same occurrence count must pass"
+        )
+        tripled = duplicated.replace(
+            "# ---\n", "  'escalation': 'carol@realcorp.io'\n# ---\n"
+        )
+        path.write_text(tripled, encoding="utf-8")
+        capsys.readouterr()
+        assert main([str(tmp_path), "--baseline", str(baseline)]) == 1, (
+            "an occurrence beyond the baselined count must fail"
+        )
+        reported = capsys.readouterr().out.strip().splitlines()
+        assert len(reported) == 1, "exactly the surplus occurrence must be reported"

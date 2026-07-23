@@ -21,6 +21,7 @@ Scan the current tree, then baseline the existing findings::
 from __future__ import annotations
 
 import argparse
+import collections
 import fnmatch
 import json
 import pathlib
@@ -211,14 +212,30 @@ def _collect_findings(arguments: argparse.Namespace, config: Config) -> list[Fin
 def _apply_baseline(
     findings: list[Finding], baseline_path: pathlib.Path
 ) -> list[Finding]:
-    """Drop findings whose fingerprints appear in the baseline file.
+    """Drop findings the baseline accepts, respecting multiplicity.
+
+    Fingerprints exclude line numbers, so repeated values in one block
+    share a fingerprint. The baseline is therefore treated as occurrence
+    counts: each recorded fingerprint suppresses one occurrence, and any
+    occurrence beyond the recorded count is retained so a newly
+    introduced duplicate still fails the scan.
 
     Examples
     --------
-    A finding recorded by ``--write-baseline`` is skipped on later runs.
+    A finding recorded twice by ``--write-baseline`` suppresses two
+    occurrences; a third occurrence of the same value is reported.
     """
-    accepted = set(json.loads(baseline_path.read_text(encoding="utf-8")))
-    return [f for f in findings if f.fingerprint() not in accepted]
+    accepted = collections.Counter(
+        json.loads(baseline_path.read_text(encoding="utf-8"))
+    )
+    remaining: list[Finding] = []
+    for finding in findings:
+        fingerprint = finding.fingerprint()
+        if accepted[fingerprint] > 0:
+            accepted[fingerprint] -= 1
+        else:
+            remaining.append(finding)
+    return remaining
 
 
 def main(argv: cabc.Sequence[str] | None = None) -> int:
@@ -233,7 +250,7 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     config = load_config(arguments.config or _default_config_path())
     findings = _collect_findings(arguments, config)
     if arguments.write_baseline is not None:
-        fingerprints = sorted({f.fingerprint() for f in findings})
+        fingerprints = sorted(f.fingerprint() for f in findings)
         arguments.write_baseline.write_text(
             json.dumps(fingerprints, indent=2) + "\n", encoding="utf-8"
         )
