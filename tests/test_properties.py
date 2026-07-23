@@ -33,6 +33,7 @@ if typ.TYPE_CHECKING:
 # Python keyword, avoiding the filtering trap.
 _SUBJECTS = st.from_regex(r"v_[a-z]{1,6}", fullmatch=True)
 _OTHER_NAMES = st.from_regex(r"w_[a-z]{1,6}", fullmatch=True)
+_BREAKERS = st.from_regex(r"x_[a-z]{1,6}", fullmatch=True)
 _WORDS = st.from_regex(r"[a-z]{2,8}", fullmatch=True)
 
 
@@ -214,6 +215,43 @@ class TestPureKernelProperties:
                 "common subjects must appear in every prefix set"
             )
 
+    @settings(deadline=None)
+    @given(subject=_SUBJECTS, count=st.integers(min_value=2, max_value=6))
+    def test_repeated_subject_returns_shared_subject(
+        self, subject: str, count: int
+    ) -> None:
+        """A subject present in every set is the exact one returned."""
+        subject_sets = tuple(frozenset({subject}) for _ in range(count))
+        assert repeated_subject(subject_sets) == subject, (
+            "a subject shared by every set must be the one returned"
+        )
+
+    @settings(deadline=None)
+    @given(subjects=st.lists(_SUBJECTS, min_size=2, max_size=6, unique=True))
+    def test_repeated_subject_none_when_all_distinct(self, subjects: list[str]) -> None:
+        """Distinct singleton sets share no subject, so None is returned."""
+        subject_sets = tuple(frozenset({subject}) for subject in subjects)
+        assert repeated_subject(subject_sets) is None, (
+            "singleton sets sharing no subject must return None"
+        )
+
+    @settings(deadline=None)
+    @given(
+        subject=_SUBJECTS,
+        extras=st.lists(_OTHER_NAMES, min_size=1, max_size=6, unique=True),
+        breaker=st.frozensets(_BREAKERS, min_size=1, max_size=3),
+    )
+    def test_narrowing_prefix_spans_shared_subject(
+        self, subject: str, extras: list[str], breaker: frozenset[str]
+    ) -> None:
+        """A shared subject spans the prefix until a disjoint set breaks it."""
+        prefix = tuple(frozenset({subject, extra}) for extra in extras)
+        length, common = narrowing_prefix((*prefix, breaker))
+        assert length == len(extras), (
+            "the prefix must span exactly the sets sharing the subject"
+        )
+        assert subject in common, "the shared subject must remain in the common set"
+
 
 class TestEntropyProperties:
     """Shannon entropy honours its algebraic invariants."""
@@ -226,6 +264,21 @@ class TestEntropyProperties:
         assert entropy >= 0.0, "entropy is never negative"
         upper = math.log2(len(set(text))) if len(set(text)) > 1 else 0.0
         assert entropy <= upper + 1e-9, "entropy is bounded by the alphabet"
+
+    @settings(deadline=None)
+    @given(
+        characters=st.sets(
+            st.characters(min_codepoint=33, max_codepoint=126),
+            min_size=2,
+            max_size=16,
+        )
+    )
+    def test_entropy_of_distinct_characters_is_log2(self, characters: set[str]) -> None:
+        """Distinct characters, each once, give entropy of log2 of the count."""
+        text = "".join(characters)
+        assert abs(shannon_entropy(text) - math.log2(len(characters))) < 1e-9, (
+            "a uniform distribution over n symbols has entropy log2(n)"
+        )
 
     @settings(deadline=None)
     @given(
