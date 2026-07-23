@@ -1,5 +1,77 @@
 # df12-python-lints Users' Guide
 
+## Provided Lints
+
+The package is a pylint plugin. Load it from a pylint configuration:
+
+```toml
+[tool.pylint.main]
+load-plugins = ["df12_python_lints"]
+```
+
+or from the command line:
+
+```bash
+pylint --load-plugins=df12_python_lints my_package
+```
+
+Loading the plugin registers three checkers.
+
+### `prefer-structural-pattern-matching` (R9101)
+
+Reports `isinstance` dispatch on a single subject, in either of two shapes:
+
+- an `if`/`elif` chain whose branch tests call `isinstance` on the same
+  subject; or
+- consecutive guard `if` statements (no `else`, each body ending in
+  `return`, `raise`, `continue`, or `break`) whose tests call `isinstance` on
+  the same subject.
+
+Both decompose the subject's shape imperatively. A `match` statement with class
+patterns states the accepted shapes directly:
+
+```python
+match value:
+    case dict():
+        handle_mapping(value)
+    case list():
+        handle_sequence(value)
+```
+
+### `assert-missing-message` (C9102)
+
+Reports `assert` statements without a failure message. A bare `assert` that
+fails reports only the falsy expression; attaching a message names the violated
+expectation. This matters most when a property-based test shrinks to a minimal
+counterexample and the reader must work out which invariant broke:
+
+```python
+assert _is_pinned_action(ref, path), "exact path pin must match"
+```
+
+The checker applies to every `assert` it sees. Projects that only want it
+enforced for test suites should enable the message for their test paths in the
+pylint configuration.
+
+### `prefer-match-over-constant-chain` (R9103)
+
+Reports `if`/`elif` chains where every branch compares one subject with
+constants, enumeration members, or literals — by equality, by membership in a
+literal collection, or by an `or` combination of such comparisons. Such chains
+are clearer as a `match` statement over an enumeration of the accepted values:
+
+```python
+match colour:
+    case Colour.RED:
+        stop()
+    case Colour.AMBER | Colour.GREEN:
+        go()
+```
+
+Branches that compare against variables, call results, or name-bound containers
+disqualify the chain, as do ordering comparisons, because they cannot become
+`case` patterns.
+
 ## Quality Gates
 
 Generated projects use `make all` as the standard local quality gate. It runs
