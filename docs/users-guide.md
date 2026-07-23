@@ -15,7 +15,7 @@ or from the command line:
 pylint --load-plugins=df12_python_lints my_package
 ```
 
-Loading the plugin registers seven checkers.
+Loading the plugin registers nine checkers.
 
 ### `prefer-structural-pattern-matching` (R9101)
 
@@ -127,33 +127,54 @@ value = eval(text)  # noqa: S307  # input is a vetted config literal
 
 A pragma on the preceding line does not count as an explanation.
 
+### Snapshot-worthy assertions (R9108, R9109)
+
+Two checkers report assertions in `test_`-named functions that would carry
+their contract more clearly as a syrupy snapshot:
+
+- `prefer-snapshot-assertion` (R9108) reports equality against a large
+  inline literal: a collection with eight or more constant or name leaves, or a
+  string with three or more newlines or 200 or more characters (including one
+  wrapped in `textwrap.dedent`).
+- `prefer-snapshot-substring` (R9109) reports three or more
+  `assert "..." in subject` probes against the same subject in one test.
+
+```python
+def test_report(report, snapshot):
+    assert report.render() == snapshot
+```
+
+Comparisons with names (an `expected` fixture or parameter), small literals,
+and asserts outside test functions are never reported. Leaf counting works on
+the AST, so reformatting a literal does not change whether it fires.
+
 ## The ambrleaks Snapshot Scanner
 
-The package also ships `ambrleaks`, a standalone scanner for syrupy
-`.ambr` snapshot files. Pylint only lints Python modules, so unredacted
-values inside snapshot files need a file-level tool. Install it as an
-opaque tool or run it from the project environment:
+The package also ships `ambrleaks`, a standalone scanner for syrupy `.ambr`
+snapshot files. Pylint only lints Python modules, so unredacted values inside
+snapshot files need a file-level tool. Install it as an opaque tool or run it
+from the project environment:
 
 ```bash
 uv tool install df12-python-lints
 ambrleaks tests
 ```
 
-The scanner walks the given paths for `.ambr` files and reports values
-that should have been redacted with a syrupy `matcher` before the
-snapshot was recorded, attributing each finding to its `# name:` test
-block. Rules follow the gitleaks model — a strict pattern, an optional
-Shannon-entropy floor, and built-in allowlists:
+The scanner walks the given paths for `.ambr` files and reports values that
+should have been redacted with a syrupy `matcher` before the snapshot was
+recorded, attributing each finding to its `# name:` test block. Rules follow
+the gitleaks model — a strict pattern, an optional Shannon-entropy floor, and
+built-in allowlists:
 
-| Rule | Detects | Default |
-| ---------------------- | -------------------------------------- | ------- |
-| `snapshot-hex` | Hex strings of 32+ characters, entropy-gated | on |
-| `snapshot-uuid` | UUID literals | on |
-| `snapshot-email` | Email addresses (RFC 2606 domains allowlisted) | on |
-| `snapshot-phone` | E.164 numbers with a leading `+` | off |
-| `snapshot-url` | `http(s)` URLs (`example.com`, loopback, and namespace URIs allowlisted) | on |
-| `snapshot-posix-path` | Absolute paths rooted in user or temp directories | on |
-| `snapshot-windows-path` | Drive-letter and UNC paths | on |
+| Rule                    | Detects                                                                  | Default |
+| ----------------------- | ------------------------------------------------------------------------ | ------- |
+| `snapshot-hex`          | Hex strings of 32+ characters, entropy-gated                             | on      |
+| `snapshot-uuid`         | UUID literals                                                            | on      |
+| `snapshot-email`        | Email addresses (RFC 2606 domains allowlisted)                           | on      |
+| `snapshot-phone`        | E.164 numbers with a leading `+`                                         | off     |
+| `snapshot-url`          | `http(s)` URLs (`example.com`, loopback, and namespace URIs allowlisted) | on      |
+| `snapshot-posix-path`   | Absolute paths rooted in user or temp directories                        | on      |
+| `snapshot-windows-path` | Drive-letter and UNC paths                                               | on      |
 
 Exit status is `0` for a clean tree and `1` when findings remain.
 
@@ -183,13 +204,12 @@ therefore lives outside the snapshot and survives regeneration:
   ambrleaks --baseline .ambrleaks-baseline.json
   ```
 
-  Fingerprints hash the file path, test name, rule, and value — not the
-  line number — so a baseline survives blocks moving when snapshots are
-  regenerated.
+  Fingerprints hash the file path, test name, rule, and value — not the line
+  number — so a baseline survives blocks moving when snapshots are regenerated.
 
 The lasting fix is redaction at record time with syrupy's
-`matcher=path_type(...)` (including its regex `replacer` idiom for
-values embedded in strings), then `pytest --snapshot-update`.
+`matcher=path_type(...)` (including its regex `replacer` idiom for values
+embedded in strings), then `pytest --snapshot-update`.
 
 ## Quality Gates
 

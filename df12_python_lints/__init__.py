@@ -15,7 +15,10 @@ The package is a pylint plugin. Loading it registers two checkers:
   imported names made by assignment rather than import; and
 - ``lint-suppression-without-explanation`` (C9106) with
   ``typecheck-suppression-without-explanation`` (C9107) flag suppression
-  pragmas that record no reason.
+  pragmas that record no reason; and
+- ``prefer-snapshot-assertion`` (R9108) with
+  ``prefer-snapshot-substring`` (R9109) flag test assertions better
+  expressed as syrupy snapshots.
 
 Examples
 --------
@@ -37,6 +40,7 @@ from .assert_messages import AssertMessageChecker
 from .constant_chain import ConstantChainChecker
 from .match_dispatch import MatchDispatchChecker
 from .reexports import ReexportAssignmentChecker
+from .snapshot_asserts import SnapshotAssertionChecker
 from .suppressions import SuppressionCommentChecker
 from .wrappers import TrivialWrapperChecker
 
@@ -48,6 +52,7 @@ __all__ = [
     "ConstantChainChecker",
     "MatchDispatchChecker",
     "ReexportAssignmentChecker",
+    "SnapshotAssertionChecker",
     "SuppressionCommentChecker",
     "TrivialWrapperChecker",
     "register",
@@ -69,3 +74,4 @@ def register(linter: PyLinter) -> None:
     linter.register_checker(TrivialWrapperChecker(linter))
     linter.register_checker(ReexportAssignmentChecker(linter))
     linter.register_checker(SuppressionCommentChecker(linter))
+    linter.register_checker(SnapshotAssertionChecker(linter))

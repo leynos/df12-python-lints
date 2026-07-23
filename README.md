@@ -16,12 +16,15 @@ A pylint plugin providing df12 house-style checkers:
 - `lint-suppression-without-explanation` (C9106) and
   `typecheck-suppression-without-explanation` (C9107) — every suppression
   pragma must record a reason.
+- `prefer-snapshot-assertion` (R9108) and `prefer-snapshot-substring`
+  (R9109) — tests asserting against large inline literals or repeatedly probing
+  substrings should use a syrupy snapshot.
 
 It also ships `ambrleaks`, a standalone scanner (installable with
-`uv tool install df12-python-lints`) that finds unredacted hex strings,
-UUIDs, emails, phone numbers, URLs, and absolute paths in syrupy `.ambr`
-snapshot files, with config- and baseline-based suppression that survives
-snapshot regeneration.
+`uv tool install df12-python-lints`) that finds unredacted hex strings, UUIDs,
+emails, phone numbers, URLs, and absolute paths in syrupy `.ambr` snapshot
+files, with config- and baseline-based suppression that survives snapshot
+regeneration.
 
 Load the plugin with `pylint --load-plugins=df12_python_lints`, or from
 `pyproject.toml`:

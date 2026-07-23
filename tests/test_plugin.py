@@ -19,6 +19,7 @@ def test_register_adds_all_checkers() -> None:
         "df12-trivial-wrapper",
         "df12-reexport-assignment",
         "df12-suppression-comments",
+        "df12-snapshot-asserts",
     }
     missing = expected - names
     assert not missing, f"checkers failed to register: {sorted(missing)}"
