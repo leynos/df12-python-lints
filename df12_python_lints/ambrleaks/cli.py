@@ -39,6 +39,10 @@ if typ.TYPE_CHECKING:
 _CONFIG_NAMES: typ.Final = ("ambrleaks.toml", ".ambrleaks.toml")
 
 
+class ConfigError(ValueError):
+    """Raised when a configuration file is structurally invalid."""
+
+
 class Config(typ.NamedTuple):
     """Loaded configuration for a scan run.
 
@@ -64,6 +68,36 @@ def default_config() -> Config:
     return Config(rule_states=(), allow_values=(), allow_tests=(), allow_paths=())
 
 
+def _validate_rules(rules: object) -> None:
+    """Ensure ``[rules]`` is a table of tables with boolean ``enabled``."""
+    if not isinstance(rules, dict):
+        message = "[rules] must be a table"
+        raise ConfigError(message)
+    for rule_id, entry in rules.items():
+        if not isinstance(entry, dict):
+            message = f"[rules.{rule_id}] must be a table"
+            raise ConfigError(message)
+        enabled = entry.get("enabled", True)
+        if not isinstance(enabled, bool):
+            message = f"[rules.{rule_id}] enabled must be a boolean"
+            raise ConfigError(message)
+
+
+def _validate_allowlist(allowlist: object) -> None:
+    """Ensure ``[allowlist]`` is a table of string lists."""
+    if not isinstance(allowlist, dict):
+        message = "[allowlist] must be a table"
+        raise ConfigError(message)
+    for key, value in allowlist.items():
+        if key not in {"values", "tests", "paths"}:
+            continue
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            message = f"[allowlist] {key} must be a list of strings"
+            raise ConfigError(message)
+
+
 def load_config(path: pathlib.Path | None) -> Config:
     """Load *path* as TOML configuration, or defaults when ``None``.
 
@@ -77,6 +111,8 @@ def load_config(path: pathlib.Path | None) -> Config:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     rules = data.get("rules", {})
     allowlist = data.get("allowlist", {})
+    _validate_rules(rules)
+    _validate_allowlist(allowlist)
     return Config(
         rule_states=tuple(
             (rule_id, bool(entry.get("enabled", True)))
@@ -105,13 +141,7 @@ def select_rules(config: Config) -> tuple[Rule, ...]:
 
 
 def _is_allowed(finding: Finding, config: Config) -> bool:
-    """Return whether *finding* matches a configuration allowlist entry.
-
-    Examples
-    --------
-    A finding in ``test_legacy_export`` is allowed when the
-    configuration lists the test glob ``test_legacy_*``.
-    """
+    """Return whether *finding* matches a configuration allowlist entry."""
     posix_path = pathlib.PurePath(finding.path).as_posix()
     return (
         any(re.search(pattern, finding.value) for pattern in config.allow_values)
@@ -138,12 +168,7 @@ def discover(paths: cabc.Iterable[pathlib.Path]) -> list[pathlib.Path]:
 
 
 def _default_config_path() -> pathlib.Path | None:
-    """Return the first conventional configuration file that exists.
-
-    Examples
-    --------
-    Returns ``ambrleaks.toml`` from the working directory when present.
-    """
+    """Return the first conventional configuration file that exists."""
     for name in _CONFIG_NAMES:
         candidate = pathlib.Path(name)
         if candidate.is_file():
@@ -152,12 +177,7 @@ def _default_config_path() -> pathlib.Path | None:
 
 
 def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
-    """Parse command-line *argv* into a namespace.
-
-    Examples
-    --------
-    ``_parse_arguments(["tests"])`` scans the ``tests`` tree.
-    """
+    """Parse command-line *argv* into a namespace."""
     parser = argparse.ArgumentParser(
         prog="ambrleaks",
         description=(
@@ -194,12 +214,7 @@ def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
 
 
 def _collect_findings(arguments: argparse.Namespace, config: Config) -> list[Finding]:
-    """Scan the requested paths and apply configuration allowlists.
-
-    Examples
-    --------
-    Returns an empty list for a tree with no ``.ambr`` files.
-    """
+    """Scan the requested paths and apply configuration allowlists."""
     rules = select_rules(config)
     findings = [
         finding
@@ -212,19 +227,7 @@ def _collect_findings(arguments: argparse.Namespace, config: Config) -> list[Fin
 def _apply_baseline(
     findings: list[Finding], baseline_path: pathlib.Path
 ) -> list[Finding]:
-    """Drop findings the baseline accepts, respecting multiplicity.
-
-    Fingerprints exclude line numbers, so repeated values in one block
-    share a fingerprint. The baseline is therefore treated as occurrence
-    counts: each recorded fingerprint suppresses one occurrence, and any
-    occurrence beyond the recorded count is retained so a newly
-    introduced duplicate still fails the scan.
-
-    Examples
-    --------
-    A finding recorded twice by ``--write-baseline`` suppresses two
-    occurrences; a third occurrence of the same value is reported.
-    """
+    """Drop findings the baseline accepts, one per recorded occurrence."""
     accepted = collections.Counter(
         json.loads(baseline_path.read_text(encoding="utf-8"))
     )
@@ -238,15 +241,8 @@ def _apply_baseline(
     return remaining
 
 
-def main(argv: cabc.Sequence[str] | None = None) -> int:
-    """Run the scanner; return a process exit code.
-
-    Examples
-    --------
-    ``main(["tests"])`` returns ``0`` for a clean tree and ``1`` when
-    findings remain after allowlists and the baseline.
-    """
-    arguments = _parse_arguments(argv)
+def _run(arguments: argparse.Namespace) -> int:
+    """Execute the scan described by *arguments* and return an exit code."""
     config = load_config(arguments.config or _default_config_path())
     findings = _collect_findings(arguments, config)
     if arguments.write_baseline is not None:
@@ -267,3 +263,24 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
         print(f"ambrleaks: {len(findings)} finding(s)", file=sys.stderr)
         return 1
     return 0
+
+
+def main(argv: cabc.Sequence[str] | None = None) -> int:
+    """Run the scanner; return a process exit code.
+
+    Examples
+    --------
+    ``main(["tests"])`` returns ``0`` for a clean tree and ``1`` when
+    findings remain after allowlists and the baseline.
+    """
+    arguments = _parse_arguments(argv)
+    try:
+        return _run(arguments)
+    except (
+        ConfigError,
+        OSError,
+        tomllib.TOMLDecodeError,
+        json.JSONDecodeError,
+    ) as err:
+        print(f"ambrleaks: error: {err}", file=sys.stderr)
+        return 2

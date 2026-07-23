@@ -17,13 +17,13 @@ from __future__ import annotations
 import collections
 import hashlib
 import math
+import pathlib
 import typing as typ
 
 from .rules import DEFAULT_RULES, Rule
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import pathlib
 
 __all__ = ["DEFAULT_RULES", "Finding", "Rule", "scan_file", "shannon_entropy"]
 
@@ -73,14 +73,17 @@ def shannon_entropy(text: str) -> float:
     return -sum((count / total) * math.log2(count / total) for count in counts.values())
 
 
-def _line_findings(line: str, rule: Rule) -> cabc.Iterator[str]:
-    """Yield the values in *line* that violate *rule*.
+def _canonical_path(path: pathlib.Path) -> str:
+    """Render *path* relative to the working directory when it lies within."""
+    resolved = path.resolve()
+    cwd = pathlib.Path.cwd().resolve()
+    if resolved.is_relative_to(cwd):
+        return resolved.relative_to(cwd).as_posix()
+    return resolved.as_posix()
 
-    Examples
-    --------
-    A body line containing a non-allowlisted email yields that address
-    for the email rule.
-    """
+
+def _line_findings(line: str, rule: Rule) -> cabc.Iterator[str]:
+    """Yield the values in *line* that violate *rule*."""
     for match in rule.pattern.finditer(line):
         value = match.group()
         if any(allowed.search(value) for allowed in rule.allow):
@@ -95,7 +98,8 @@ def scan_file(path: pathlib.Path, rules: cabc.Sequence[Rule]) -> list[Finding]:
 
     Control lines (column-zero ``#`` lines) carry block structure and
     are never scanned; body lines are attributed to the most recent
-    ``# name:`` block.
+    ``# name:`` block. Reported paths are canonicalised so fingerprints
+    do not depend on the working directory from which the scan is run.
 
     Examples
     --------
@@ -104,6 +108,7 @@ def scan_file(path: pathlib.Path, rules: cabc.Sequence[Rule]) -> list[Finding]:
     """
     findings: list[Finding] = []
     test_name = "<module>"
+    canonical = _canonical_path(path)
     text = path.read_text(encoding="utf-8")
     for line_number, line in enumerate(text.splitlines(), start=1):
         if line.startswith("#"):
@@ -111,7 +116,7 @@ def scan_file(path: pathlib.Path, rules: cabc.Sequence[Rule]) -> list[Finding]:
                 test_name = line.removeprefix("# name:").strip()
             continue
         findings.extend(
-            Finding(str(path), line_number, test_name, rule.rule_id, value)
+            Finding(canonical, line_number, test_name, rule.rule_id, value)
             for rule in rules
             for value in _line_findings(line, rule)
         )

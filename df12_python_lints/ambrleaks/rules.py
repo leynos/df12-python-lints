@@ -90,7 +90,9 @@ DEFAULT_RULES: typ.Final[tuple[Rule, ...]] = (
         rule_id="snapshot-posix-path",
         description="Absolute POSIX path; redact before snapshotting",
         pattern=re.compile(
-            r"(?<![\w/])/(?:home|Users|tmp|var|opt|mnt|private)/[^\s\"',\)\]]+"
+            r"(?<![\w/])/(?:home|Users|tmp|var|opt|mnt|private|etc|usr|srv"
+            r"|root|run|bin|sbin|lib|lib64|dev|proc|sys|boot|media)"
+            r"/[^\s\"',\)\]]+"
         ),
         allow=_PATH_ALLOW,
     ),
@@ -98,7 +100,7 @@ DEFAULT_RULES: typ.Final[tuple[Rule, ...]] = (
         rule_id="snapshot-windows-path",
         description="Absolute Windows path; redact before snapshotting",
         pattern=re.compile(
-            r"\b[A-Za-z]:\\(?:Users|Temp|Windows)\\[^\s\"']+"
+            r"\b[A-Za-z]:\\[^\s\"']+"
             r"|\\\\[\w.$-]+\\[^\s\"']+"
         ),
     ),
