@@ -23,7 +23,7 @@ if typ.TYPE_CHECKING:
 
 @pytest.fixture
 def write_snapshot() -> cabc.Callable[[pathlib.Path, str], pathlib.Path]:
-    """Return a factory that writes a snapshot file into a directory.
+    r"""Return a factory that writes a snapshot file into a directory.
 
     The factory creates a ``__snapshots__`` subdirectory beneath the
     given base directory (which must not already contain one) and
@@ -41,7 +41,7 @@ def write_snapshot() -> cabc.Callable[[pathlib.Path, str], pathlib.Path]:
     Seed a snapshot and scan it::
 
         def test_scan(tmp_path, write_snapshot):
-            path = write_snapshot(tmp_path, "# name: test_x\\n  'v'\\n# ---\\n")
+            path = write_snapshot(tmp_path, "# name: test_x\n  'v'\n# ---\n")
             findings = scan_file(path, DEFAULT_RULES)
     """
 
