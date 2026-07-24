@@ -37,6 +37,7 @@ def test_chain_kernels_satisfy_contracts() -> None:
             "run",
             "crosshair",
             "check",
+            "--report_all",
             "--analysis_kind=PEP316",
             "df12_python_lints._chains",
         ],
@@ -52,4 +53,20 @@ def test_chain_kernels_satisfy_contracts() -> None:
     assert "no checkable functions" not in result.stderr.lower(), (
         "the kernels must remain visible to CrossHair; a vacuous pass "
         "means the contracts or annotations stopped resolving"
+    )
+    # With --report_all every postcondition yields a per-line verdict:
+    # "Confirmed over all paths." when the search completes, or "Not
+    # confirmed." when the budget runs out without a counterexample.
+    # These kernels currently exhaust the budget, so requiring full
+    # confirmation would be permanently red; requiring a verdict per
+    # contract still rules out a quiet vacuous pass.
+    verdicts = [
+        line
+        for line in result.stdout.splitlines()
+        if "_chains.py:" in line
+        and ("Confirmed over all paths" in line or "Not confirmed" in line)
+    ]
+    minimum_contract_verdicts = 4
+    assert len(verdicts) >= minimum_contract_verdicts, (
+        f"each postcondition must produce an analysis verdict; got:\n{result.stdout}"
     )

@@ -265,3 +265,31 @@ class TestCli:
         )
         reported = capsys.readouterr().out.strip().splitlines()
         assert len(reported) == 1, "exactly the surplus occurrence must be reported"
+
+    def test_detects_posix_path_with_unlisted_root(
+        self,
+        tmp_path: pathlib.Path,
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """Any three-segment absolute POSIX path is detected."""
+        content = "# name: test_paths\n  'key': '/data/uploads/key'\n# ---\n"
+        path = write_snapshot(tmp_path, content)
+        reported = {(f.rule_id, f.value) for f in scan_file(path, DEFAULT_RULES)}
+        assert ("snapshot-posix-path", "/data/uploads/key") in reported, (
+            "absolute paths must be detected without a root allowlist"
+        )
+
+    def test_ignores_short_route_fragments(
+        self,
+        tmp_path: pathlib.Path,
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """Two-segment route fragments such as /api/v1 are not paths."""
+        content = "# name: test_routes\n  'route': '/api/v1'\n# ---\n"
+        path = write_snapshot(tmp_path, content)
+        findings = [
+            f
+            for f in scan_file(path, DEFAULT_RULES)
+            if f.rule_id == "snapshot-posix-path"
+        ]
+        assert findings == [], "short route fragments must not be reported"

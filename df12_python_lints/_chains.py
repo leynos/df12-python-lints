@@ -28,6 +28,17 @@ def repeated_subject(subject_sets: tuple[frozenset[str], ...]) -> str | None:
     Ties break towards the most frequent, then lexically smallest,
     subject, so the result is deterministic.
 
+    Parameters
+    ----------
+    subject_sets : tuple[frozenset[str], ...]
+        The subjects named by each branch test, in source order.
+
+    Returns
+    -------
+    str | None
+        The dispatched-on subject, or ``None`` when no subject appears
+        in at least two sets.
+
     pre: len(subject_sets) <= 6
     post: __return__ is None or sum(__return__ in s for s in subject_sets) >= 2
 
@@ -53,6 +64,18 @@ def narrowing_prefix(
     The prefix extends while every set still shares at least one
     subject with all sets before it; the returned pair holds the prefix
     length and the subjects common to the whole prefix.
+
+    Parameters
+    ----------
+    subject_sets : tuple[frozenset[str], ...]
+        The subjects named by each consecutive guard, in source order.
+
+    Returns
+    -------
+    tuple[int, frozenset[str]]
+        The prefix length and the subjects common to the whole prefix;
+        ``(0, frozenset())`` when the input is empty or starts with an
+        empty set.
 
     pre: len(subject_sets) <= 6
     post: __return__[0] <= len(subject_sets)
@@ -80,6 +103,16 @@ def narrowing_prefix(
 
 def elif_chain_tests(node: nodes.If) -> list[nodes.NodeNG]:
     """Collect the test expressions of *node* and its ``elif`` chain.
+
+    Parameters
+    ----------
+    node : nodes.If
+        The head ``if`` statement of the chain.
+
+    Returns
+    -------
+    list[nodes.NodeNG]
+        The test expression of every branch, in source order.
 
     Examples
     --------

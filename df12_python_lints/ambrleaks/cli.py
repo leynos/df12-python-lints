@@ -101,6 +101,15 @@ def _validate_allowlist(allowlist: object) -> None:
 def load_config(path: pathlib.Path | None) -> Config:
     """Load *path* as TOML configuration, or defaults when ``None``.
 
+    Raises
+    ------
+    ConfigError
+        If the configuration is structurally invalid.
+    OSError
+        If the file cannot be read.
+    tomllib.TOMLDecodeError
+        If the file is not valid TOML.
+
     Examples
     --------
     A file containing ``[rules.snapshot-phone]`` with ``enabled = true``
@@ -216,10 +225,11 @@ def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
 def _collect_findings(arguments: argparse.Namespace, config: Config) -> list[Finding]:
     """Scan the requested paths and apply configuration allowlists."""
     rules = select_rules(config)
+    base_dir = pathlib.Path.cwd()
     findings = [
         finding
         for path in discover(arguments.paths)
-        for finding in scan_file(path, rules)
+        for finding in scan_file(path, rules, base_dir=base_dir)
     ]
     return [f for f in findings if not _is_allowed(f, config)]
 
@@ -279,6 +289,7 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     except (
         ConfigError,
         OSError,
+        UnicodeDecodeError,
         tomllib.TOMLDecodeError,
         json.JSONDecodeError,
     ) as err:

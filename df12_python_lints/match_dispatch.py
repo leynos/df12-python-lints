@@ -101,6 +101,13 @@ _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
 class MatchDispatchChecker(checkers.BaseChecker):
     """Report ``isinstance`` dispatch that should use ``match``/``case``.
 
+    Attributes
+    ----------
+    name : str
+        The checker identifier, ``df12-match-dispatch``.
+    msgs : dict[str, MessageDefinitionTuple]
+        The R9101 ``prefer-structural-pattern-matching`` message.
+
     Examples
     --------
     Enable alongside the plugin and run pylint as usual::

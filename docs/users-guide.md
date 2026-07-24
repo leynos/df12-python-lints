@@ -192,7 +192,7 @@ built-in allowlists:
 | `snapshot-email`        | Email addresses (RFC 2606 domains allowlisted)                           | on      |
 | `snapshot-phone`        | E.164 numbers with a leading `+`                                         | off     |
 | `snapshot-url`          | `http(s)` URLs (`example.com`, loopback, and namespace URIs allowlisted) | on      |
-| `snapshot-posix-path`   | Absolute paths rooted in user or temp directories                        | on      |
+| `snapshot-posix-path`   | Absolute POSIX paths of three or more segments                           | on      |
 | `snapshot-windows-path` | Drive-letter and UNC paths                                               | on      |
 
 Exit status is `0` for a clean tree and `1` when findings remain.

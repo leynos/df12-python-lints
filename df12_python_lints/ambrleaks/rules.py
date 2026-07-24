@@ -89,11 +89,9 @@ DEFAULT_RULES: typ.Final[tuple[Rule, ...]] = (
     Rule(
         rule_id="snapshot-posix-path",
         description="Absolute POSIX path; redact before snapshotting",
-        pattern=re.compile(
-            r"(?<![\w/])/(?:home|Users|tmp|var|opt|mnt|private|etc|usr|srv"
-            r"|root|run|bin|sbin|lib|lib64|dev|proc|sys|boot|media)"
-            r"/[^\s\"',\)\]]+"
-        ),
+        # Three or more segments: short route fragments such as /api/v1
+        # stay excluded without a top-level directory allowlist.
+        pattern=re.compile(r"(?<![\w/])(?:/[\w.@+~-]+){3,}"),
         allow=_PATH_ALLOW,
     ),
     Rule(

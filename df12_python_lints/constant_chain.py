@@ -70,10 +70,10 @@ def _is_constant_like(node: nodes.NodeNG | bases.Proxy) -> bool:
             return True
         case nodes.UnaryOp(operand=nodes.Const()):
             return True
-        case nodes.Attribute(attrname=attrname, expr=expr):
-            if attrname.isupper():
-                return True
-            return isinstance(expr, nodes.Name) and expr.name[:1].isupper()
+        case nodes.Attribute(attrname=attrname) if attrname.isupper():
+            return True
+        case nodes.Attribute(expr=nodes.Name(name=name)):
+            return name[:1].isupper()
         case nodes.Name(name=name):
             return name.isupper()
         case _:
@@ -140,6 +140,13 @@ def _comparison_subject(test: nodes.NodeNG) -> str | None:
 
 class ConstantChainChecker(checkers.BaseChecker):
     """Report constant-comparison chains that should use ``match``/``case``.
+
+    Attributes
+    ----------
+    name : str
+        The checker identifier, ``df12-constant-chain``.
+    msgs : dict[str, MessageDefinitionTuple]
+        The R9103 ``prefer-match-over-constant-chain`` message.
 
     Examples
     --------

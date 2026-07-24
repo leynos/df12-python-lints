@@ -121,6 +121,13 @@ def _has_inline_explanation(comment_text: str) -> bool:
 class SuppressionCommentChecker(checkers.BaseTokenChecker):
     """Report suppression pragmas that record no reason.
 
+    Attributes
+    ----------
+    name : str
+        The checker identifier, ``df12-suppression-comments``.
+    msgs : dict[str, MessageDefinitionTuple]
+        The C9106 lint and C9107 type-check suppression messages.
+
     Examples
     --------
     Enable alongside the plugin and run pylint as usual::

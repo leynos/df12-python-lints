@@ -73,12 +73,12 @@ def shannon_entropy(text: str) -> float:
     return -sum((count / total) * math.log2(count / total) for count in counts.values())
 
 
-def _canonical_path(path: pathlib.Path) -> str:
-    """Render *path* relative to the working directory when it lies within."""
+def _canonical_path(path: pathlib.Path, base_dir: pathlib.Path) -> str:
+    """Render *path* relative to *base_dir* when it lies within."""
     resolved = path.resolve()
-    cwd = pathlib.Path.cwd().resolve()
-    if resolved.is_relative_to(cwd):
-        return resolved.relative_to(cwd).as_posix()
+    base = base_dir.resolve()
+    if resolved.is_relative_to(base):
+        return resolved.relative_to(base).as_posix()
     return resolved.as_posix()
 
 
@@ -93,13 +93,21 @@ def _line_findings(line: str, rule: Rule) -> cabc.Iterator[str]:
         yield value
 
 
-def scan_file(path: pathlib.Path, rules: cabc.Sequence[Rule]) -> list[Finding]:
+def scan_file(
+    path: pathlib.Path,
+    rules: cabc.Sequence[Rule],
+    *,
+    base_dir: pathlib.Path | None = None,
+) -> list[Finding]:
     """Scan the ``.ambr`` file at *path* with *rules*.
 
     Control lines (column-zero ``#`` lines) carry block structure and
     are never scanned; body lines are attributed to the most recent
-    ``# name:`` block. Reported paths are canonicalised so fingerprints
-    do not depend on the working directory from which the scan is run.
+    ``# name:`` block. Reported paths are canonicalised against
+    *base_dir* (the working directory when omitted) so fingerprints do
+    not depend on how the scan is invoked. Read failures (``OSError``,
+    ``UnicodeDecodeError``) propagate to the caller; the CLI reports
+    them at its boundary.
 
     Examples
     --------
@@ -108,7 +116,7 @@ def scan_file(path: pathlib.Path, rules: cabc.Sequence[Rule]) -> list[Finding]:
     """
     findings: list[Finding] = []
     test_name = "<module>"
-    canonical = _canonical_path(path)
+    canonical = _canonical_path(path, base_dir or pathlib.Path.cwd())
     text = path.read_text(encoding="utf-8")
     for line_number, line in enumerate(text.splitlines(), start=1):
         if line.startswith("#"):

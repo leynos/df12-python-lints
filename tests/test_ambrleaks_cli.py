@@ -136,3 +136,33 @@ class TestDiscoveryAndPaths:
 def test_entropy_of_empty_text_is_zero() -> None:
     """The entropy gate treats empty text as zero entropy."""
     assert abs(shannon_entropy("")) < 1e-12, "empty text must score zero entropy"
+
+
+class TestScanBoundaries:
+    """Exercise decode failures and base-directory injection."""
+
+    def test_invalid_utf8_snapshot_exits_two(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A snapshot that is not valid UTF-8 reports an error, exits 2."""
+        snapshot_dir = tmp_path / "__snapshots__"
+        snapshot_dir.mkdir()
+        (snapshot_dir / "test_demo.ambr").write_bytes(b"# name: t\n\xff\xfe\n")
+        exit_code = main([str(tmp_path)])
+        assert exit_code == 2, "invalid UTF-8 input must exit 2"
+        assert "ambrleaks: error:" in capsys.readouterr().err, (
+            "decode errors must be reported to stderr"
+        )
+
+    def test_scan_file_honours_injected_base_dir(
+        self,
+        tmp_path: pathlib.Path,
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """Paths are canonicalized against the injected base directory."""
+        path = write_snapshot(tmp_path, _SNAPSHOT)
+        findings = scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
+        assert findings, "the seeded snapshot must produce findings"
+        assert all(
+            finding.path == "__snapshots__/test_demo.ambr" for finding in findings
+        ), "paths must be rendered relative to the injected base directory"
