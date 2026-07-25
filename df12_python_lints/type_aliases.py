@@ -97,13 +97,46 @@ def _dotted_parts(node: nodes.NodeNG) -> tuple[nodes.Name, list[str]] | None:
     return current, attrs
 
 
+def _assignment_import_origin(
+    assignment: nodes.NodeNG,
+    bound_name: str,
+) -> str | None:
+    """Return the import origin *assignment* binds to *bound_name*.
+
+    Classifies a single binding drawn from a name's lookup chain: an
+    ``import`` or ``from`` import that binds *bound_name* yields its
+    dotted origin, and any other assignment yields ``None``. An unaliased
+    dotted ``import a.b.c`` binds only its top-level name and resolves to
+    that top-level name.
+
+    Examples
+    --------
+    For ``import collections.abc as cabc`` and ``bound_name="cabc"`` the
+    result is ``"collections.abc"``; ``from typing import Callable`` with
+    ``bound_name="Callable"`` yields ``"typing.Callable"``; a non-import
+    binding yields ``None``.
+    """
+    match assignment:
+        case nodes.Import(names=names):
+            for modname, alias in names:
+                if (alias or modname.partition(".")[0]) == bound_name:
+                    return modname if alias else modname.partition(".")[0]
+        case nodes.ImportFrom(modname=modname, names=names):
+            for original, alias in names:
+                if (alias or original) == bound_name:
+                    return f"{modname}.{original}"
+    return None
+
+
 def _imported_origin(name_node: nodes.Name) -> str | None:
     """Resolve the dotted module path *name_node* was imported as.
 
-    ``import collections.abc as cabc`` maps ``cabc`` to
-    ``collections.abc``; ``from typing import Callable as C`` maps ``C``
-    to ``typing.Callable``. Names not bound by an import resolve to
-    ``None``.
+    Scans *name_node*'s lookup assignments in order and returns the first
+    import origin classified by :func:`_assignment_import_origin`, or
+    ``None`` when no binding is an import. ``import collections.abc as
+    cabc`` maps ``cabc`` to ``collections.abc``; ``from typing import
+    Callable as C`` maps ``C`` to ``typing.Callable``. Names not bound by
+    an import resolve to ``None``.
 
     Examples
     --------
@@ -112,18 +145,9 @@ def _imported_origin(name_node: nodes.Name) -> str | None:
     """
     _, assignments = name_node.lookup(name_node.name)
     for assignment in assignments:
-        match assignment:
-            case nodes.Import(names=names):
-                for modname, alias in names:
-                    bound = alias or modname.partition(".")[0]
-                    if bound == name_node.name:
-                        return modname if alias else modname.partition(".")[0]
-            case nodes.ImportFrom(modname=modname, names=names):
-                for original, alias in names:
-                    if (alias or original) == name_node.name:
-                        return f"{modname}.{original}"
-            case _:
-                continue
+        origin = _assignment_import_origin(assignment, name_node.name)
+        if origin is not None:
+            return origin
     return None
 
 

@@ -8,12 +8,20 @@ import astroid
 from pylint import testutils
 from pylint.testutils import set_config
 
-from df12_python_lints.type_aliases import TypeAliasChecker
+from df12_python_lints.type_aliases import (
+    TypeAliasChecker,
+    _assignment_import_origin,
+)
 
 
 def _extract_assign(code: str) -> astroid.nodes.Assign:
     """Extract the ``#@``-marked assignment statement from *code*."""
     return typ.cast("astroid.nodes.Assign", astroid.extract_node(code))
+
+
+def _extract_statement(code: str) -> astroid.nodes.NodeNG:
+    """Extract the ``#@``-marked statement from *code*."""
+    return typ.cast("astroid.nodes.NodeNG", astroid.extract_node(code))
 
 
 def _extract_annassign(code: str) -> astroid.nodes.AnnAssign:
@@ -209,3 +217,37 @@ class TestTypeAliasChecker(testutils.CheckerTestCase):
         )
         with self.assertNoMessages():
             self.checker.visit_assign(node)
+
+
+class TestAssignmentImportOrigin:
+    """Exercise the extracted per-assignment import classifier directly."""
+
+    def test_aliased_dotted_import(self) -> None:
+        """An aliased dotted import resolves to its full dotted path."""
+        node = _extract_statement("import collections.abc as cabc  #@")
+        assert _assignment_import_origin(node, "cabc") == "collections.abc"
+
+    def test_unaliased_dotted_import_binds_top_level(self) -> None:
+        """An unaliased dotted import binds and resolves its top-level name."""
+        node = _extract_statement("import collections.abc  #@")
+        assert _assignment_import_origin(node, "collections") == "collections"
+
+    def test_from_import_with_alias(self) -> None:
+        """A from-import alias resolves to the original dotted origin."""
+        node = _extract_statement("from typing import Callable as C  #@")
+        assert _assignment_import_origin(node, "C") == "typing.Callable"
+
+    def test_from_import_without_alias(self) -> None:
+        """A from-import resolves to the module-qualified original name."""
+        node = _extract_statement("from typing import Callable  #@")
+        assert _assignment_import_origin(node, "Callable") == "typing.Callable"
+
+    def test_non_matching_bound_name_is_none(self) -> None:
+        """An import that does not bind the name yields None."""
+        node = _extract_statement("import os  #@")
+        assert _assignment_import_origin(node, "sys") is None
+
+    def test_non_import_assignment_is_none(self) -> None:
+        """A binding that is not an import yields None."""
+        node = _extract_statement("x = 1  #@")
+        assert _assignment_import_origin(node, "x") is None
