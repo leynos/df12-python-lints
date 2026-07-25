@@ -1,7 +1,7 @@
 """df12-python-lints: pylint checkers for df12 Python conventions.
 
-The package is a pylint plugin. Loading it registers seven checkers
-providing ten messages:
+The package is a pylint plugin. Loading it registers nine checkers
+providing twelve messages:
 
 - ``prefer-structural-pattern-matching`` (R9101) flags ``isinstance``
   dispatch chains better expressed as ``match`` statements;
@@ -21,7 +21,12 @@ providing ten messages:
   pragmas that record no reason; and
 - ``prefer-snapshot-assertion`` (R9108) with
   ``prefer-snapshot-substring`` (R9109) flag test assertions better
-  expressed as syrupy snapshots.
+  expressed as syrupy snapshots; and
+- ``prefer-type-statement`` (R9111) flags module-level type aliases
+  better declared with the PEP 695 ``type`` statement, while
+  ``redundant-future-annotations`` (C9112) flags ``from __future__
+  import annotations`` on a 3.14+ baseline; both respect pylint's
+  ``py-version`` option.
 
 Examples
 --------
@@ -41,10 +46,12 @@ import typing as typ
 
 from .assert_messages import AssertMessageChecker
 from .constant_chain import ConstantChainChecker
+from .future_annotations import FutureAnnotationsChecker
 from .match_dispatch import MatchDispatchChecker
 from .reexports import ReexportAssignmentChecker
 from .snapshot_asserts import SnapshotAssertionChecker
 from .suppressions import SuppressionCommentChecker
+from .type_aliases import TypeAliasChecker
 from .wrappers import TrivialWrapperChecker
 
 if typ.TYPE_CHECKING:
@@ -53,11 +60,13 @@ if typ.TYPE_CHECKING:
 __all__ = [
     "AssertMessageChecker",
     "ConstantChainChecker",
+    "FutureAnnotationsChecker",
     "MatchDispatchChecker",
     "ReexportAssignmentChecker",
     "SnapshotAssertionChecker",
     "SuppressionCommentChecker",
     "TrivialWrapperChecker",
+    "TypeAliasChecker",
     "register",
 ]
 
@@ -78,3 +87,5 @@ def register(linter: PyLinter) -> None:
     linter.register_checker(ReexportAssignmentChecker(linter))
     linter.register_checker(SuppressionCommentChecker(linter))
     linter.register_checker(SnapshotAssertionChecker(linter))
+    linter.register_checker(TypeAliasChecker(linter))
+    linter.register_checker(FutureAnnotationsChecker(linter))

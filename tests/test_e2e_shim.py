@@ -32,13 +32,20 @@ _EXPECTED_SYMBOLS = frozenset({
     "prefer-snapshot-assertion",
     "prefer-snapshot-substring",
     "trivial-alias-wrapper",
+    "prefer-type-statement",
+    "redundant-future-annotations",
 })
 
 _FIXTURE = '''\
 """Fixture holding one violation per df12 checker."""
+from __future__ import annotations
+
+import collections.abc as cabc
 import os.path
 
 join = os.path.join
+
+Clock = cabc.Callable[[], float]
 
 
 def walk(value):
@@ -132,6 +139,11 @@ def _run_shim_pylint(target: pathlib.Path) -> list[dict[str, typ.Any]]:
         "--load-plugins=df12_python_lints",
         "--disable=all",
         f"--enable={','.join(sorted(_EXPECTED_SYMBOLS))}",
+        # py-version defaults to the running interpreter — PyPy, which
+        # trails CPython — so pin the baseline the py-version-gated
+        # checkers (prefer-type-statement, redundant-future-annotations)
+        # are expected to fire on.
+        "--py-version=3.14",
         "--output-format=json",
         str(target),
     ]

@@ -15,7 +15,7 @@ or from the command line:
 pylint --load-plugins=df12_python_lints my_package
 ```
 
-Loading the plugin registers ten messages.
+Loading the plugin registers twelve messages.
 
 ### `prefer-structural-pattern-matching` (R9101)
 
@@ -166,6 +166,43 @@ def test_report(report, snapshot):
 Comparisons with names (an `expected` fixture or parameter), small literals,
 and asserts outside test functions are never reported. Leaf counting works on
 the AST, so reformatting a literal does not change whether it fires.
+
+### `prefer-type-statement` (R9111)
+
+Module-level type aliases should use the PEP 695 `type` statement, which names
+the intent and defers evaluation of the aliased expression:
+
+```python
+import collections.abc as cabc
+
+Clock = cabc.Callable[[], dt.datetime]    # flagged
+Pair: TypeAlias = "tuple[int, int]"       # flagged
+
+type Clock = cabc.Callable[[], dt.datetime]  # preferred
+```
+
+A plain assignment counts as an alias when its value subscripts a construct from
+`typing`, `typing_extensions`, or `collections.abc` (resolved through the
+module's imports, so aliased imports such as `import collections.abc as cabc`
+are recognized), or an unshadowed builtin generic such as `dict[str, int]`.
+`TypeAlias`-annotated assignments always count. Bindings inside functions,
+subscripts of runtime values, and unannotated PEP 604 unions (`X = int | str`)
+are never reported.
+
+The check respects pylint's `py-version` option and stays silent when the
+configured baseline predates Python 3.12, the first release with the `type`
+statement.
+
+### `redundant-future-annotations` (C9112)
+
+`from __future__ import annotations` should be removed once the project
+baseline reaches Python 3.14. Deferred evaluation of annotations is the default
+there, and the future import is not a harmless no-op: it forces the older
+stringified semantics instead of 3.14's lazily evaluated annotation objects,
+which runtime annotation consumers can observe.
+
+The check respects pylint's `py-version` option; projects whose configured
+baseline still includes 3.13 or older keep the import without noise.
 
 ## The ambrleaks Snapshot Scanner
 

@@ -6,11 +6,16 @@ This guide explains the contributor workflow for the generated project.
 
 Pylint discovers the plugin through `register()` in
 `df12_python_lints/__init__.py`, the entry point pylint calls when
-`load-plugins` names the package. It instantiates and registers the seven
+`load-plugins` names the package. It instantiates and registers the nine
 checkers, each defined in its own module: `MatchDispatchChecker`,
 `AssertMessageChecker`, `ConstantChainChecker`, `TrivialWrapperChecker`,
-`ReexportAssignmentChecker`, `SuppressionCommentChecker`, and
-`SnapshotAssertionChecker`. Between them they expose ten messages.
+`ReexportAssignmentChecker`, `SuppressionCommentChecker`,
+`SnapshotAssertionChecker`, `TypeAliasChecker`, and `FutureAnnotationsChecker`.
+Between them they expose twelve messages. The last two are gated on pylint's
+`py-version` option: the type-alias check needs a 3.12+ baseline (PEP 695) and
+the future-annotations check a 3.14+ baseline (PEP 749 deferred evaluation), so
+the end-to-end shim tests pass `--py-version=3.14` explicitly — the shim runs
+under PyPy, whose interpreter version would otherwise gate both checks off.
 
 Logic shared by more than one checker lives in two private helper modules:
 
