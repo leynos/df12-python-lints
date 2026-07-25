@@ -7,12 +7,17 @@ import typing as typ
 import astroid
 from pylint import testutils
 
-from df12_python_lints.wrappers import TrivialWrapperChecker
+from df12_python_lints.wrappers import TrivialWrapperChecker, _forwarded_names
 
 
 def _extract_function(code: str) -> astroid.nodes.FunctionDef:
     """Extract the ``#@``-marked function definition from *code*."""
     return typ.cast("astroid.nodes.FunctionDef", astroid.extract_node(code))
+
+
+def _extract_call(code: str) -> astroid.nodes.Call:
+    """Extract the ``#@``-marked call expression from *code*."""
+    return typ.cast("astroid.nodes.Call", astroid.extract_node(code))
 
 
 def _wrapper_message(
@@ -293,3 +298,33 @@ class TestTrivialAliasWrapper(_TrivialWrapperCheckerTestCase):
                 return (self.a + self.b).send(x)
             """
         )
+
+
+class TestForwardedNames:
+    """Exercise the extracted argument-forwarding helper directly."""
+
+    def test_keeps_order_and_multiplicity(self) -> None:
+        """Bare and starred names are returned in order, duplicates kept."""
+        call = _extract_call("target(a, *b, a)  #@")
+        assert _forwarded_names(call.args) == ("a", "b", "a")
+
+    def test_returns_none_for_a_transformed_argument(self) -> None:
+        """One transformed operand rejects the whole argument list."""
+        call = _extract_call("target(a, b.strip())  #@")
+        assert _forwarded_names(call.args) is None
+
+    def test_returns_none_for_a_constant_argument(self) -> None:
+        """One constant operand rejects the whole argument list."""
+        call = _extract_call("target(a, 3)  #@")
+        assert _forwarded_names(call.args) is None
+
+    def test_forwards_keyword_value_names(self) -> None:
+        """Keyword value operands forward their names when unchanged."""
+        call = _extract_call("target(x=a, y=b)  #@")
+        names = _forwarded_names(keyword.value for keyword in call.keywords)
+        assert names == ("a", "b")
+
+    def test_empty_arguments_yield_empty_tuple(self) -> None:
+        """No operands forward no names, distinct from a rejection."""
+        call = _extract_call("target()  #@")
+        assert _forwarded_names(call.args) == ()

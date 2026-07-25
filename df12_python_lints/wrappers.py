@@ -105,6 +105,29 @@ def _forwarded_name(argument: nodes.NodeNG) -> str | None:
             return None
 
 
+def _forwarded_names(
+    arguments: cabc.Iterable[nodes.NodeNG],
+) -> tuple[str, ...] | None:
+    """Return the names *arguments* forward unchanged, or ``None``.
+
+    Every operand must be a name forwarded unchanged (see
+    :func:`_forwarded_name`); the result is ``None`` as soon as any
+    operand is a transformed expression, a constant, or otherwise not a
+    bare forwarded name, so callers can treat a partial match as no
+    match. Otherwise the returned tuple keeps the operands' order and
+    multiplicity.
+
+    Examples
+    --------
+    ``(a, *b)`` yields ``("a", "b")``; ``(a.strip(),)`` and ``(a, 3)``
+    yield ``None``.
+    """
+    names = tuple(_forwarded_name(argument) for argument in arguments)
+    if any(name is None for name in names):
+        return None
+    return tuple(name for name in names if name is not None)
+
+
 def _is_passthrough_call(call: nodes.Call, expected: cabc.Sequence[str]) -> bool:
     """Return whether *call* forwards exactly *expected*, in order.
 
@@ -119,22 +142,14 @@ def _is_passthrough_call(call: nodes.Call, expected: cabc.Sequence[str]) -> bool
     forward; ``target(b, a)``, ``target(a, a)``, and ``target(a)`` do
     not.
     """
-    positional: list[str] = []
-    for argument in call.args:
-        name = _forwarded_name(argument)
-        if name is None:
-            return False
-        positional.append(name)
-    keyword_names: list[str] = []
-    for keyword in call.keywords:
-        name = _forwarded_name(keyword.value)
-        if name is None:
-            return False
-        keyword_names.append(name)
+    positional = _forwarded_names(call.args)
+    keyword_names = _forwarded_names(keyword.value for keyword in call.keywords)
+    if positional is None or keyword_names is None:
+        return False
     if sorted([*positional, *keyword_names]) != sorted(expected):
         return False
     forwarded_positionally = set(positional)
-    return positional == [
+    return list(positional) == [
         parameter for parameter in expected if parameter in forwarded_positionally
     ]
 
