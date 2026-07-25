@@ -42,7 +42,7 @@ def write_snapshot() -> cabc.Callable[[pathlib.Path, str], pathlib.Path]:
 
         def test_scan(tmp_path, write_snapshot):
             path = write_snapshot(tmp_path, "# name: test_x\n  'v'\n# ---\n")
-            findings = scan_file(path, DEFAULT_RULES)
+            findings = scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
     """
 
     def _write(directory: pathlib.Path, content: str) -> pathlib.Path:

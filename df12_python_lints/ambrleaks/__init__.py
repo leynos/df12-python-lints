@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from .cli import main
 from .rules import DEFAULT_RULES, Rule
-from .scanner import Finding, scan_file, shannon_entropy
+from .scanner import Finding, scan_file, scan_text, shannon_entropy
 
 __all__ = [
     "DEFAULT_RULES",
@@ -25,5 +25,6 @@ __all__ = [
     "Rule",
     "main",
     "scan_file",
+    "scan_text",
     "shannon_entropy",
 ]

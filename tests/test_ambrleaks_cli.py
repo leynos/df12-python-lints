@@ -117,20 +117,27 @@ class TestDiscoveryAndPaths:
         monkeypatch.chdir(tmp_path)
         assert main(["."]) == 0, "the conventional config file must be honoured"
 
-    def test_findings_use_cwd_relative_paths(
+    def test_cli_reports_working_directory_relative_paths(
         self,
         tmp_path: pathlib.Path,
         monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
         write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
     ) -> None:
-        """Paths under the working directory are reported relative to it."""
-        path = write_snapshot(tmp_path, _SNAPSHOT)
+        """Resolve the base directory from cwd once and report relatively.
+
+        The CLI renders findings beneath the working directory relative to
+        it. The scanner core no longer consults the working directory; this
+        cwd-relative rendering is a property of the CLI boundary, which
+        injects ``Path.cwd()`` as the base directory.
+        """
+        write_snapshot(tmp_path, _SNAPSHOT)
         monkeypatch.chdir(tmp_path)
-        findings = scan_file(path, DEFAULT_RULES)
-        assert findings, "the seeded snapshot must produce findings"
-        assert all(
-            finding.path == "__snapshots__/test_demo.ambr" for finding in findings
-        ), "paths under the working directory must be reported relative to it"
+        assert main(["."]) == 1, "the seeded snapshot must produce findings"
+        out = capsys.readouterr().out
+        assert "__snapshots__/test_demo.ambr:" in out, (
+            "paths under the working directory must be reported relative to it"
+        )
 
 
 def test_entropy_of_empty_text_is_zero() -> None:

@@ -5,11 +5,17 @@ with ``#`` (a serializer-version header, ``# name: <test-id>`` block
 openers, and ``# ---`` terminators) while snapshot bodies are indented.
 The scanner attributes every finding to the enclosing test block.
 
+The module separates a pure core from its filesystem boundary:
+:func:`scan_text` performs all block attribution and rule matching over
+an in-memory string, while :func:`scan_file` is a thin boundary that
+reads a file and delegates to it. Both require an explicit *base_dir* so
+reported paths never depend on the process working directory.
+
 Examples
 --------
 Scan one snapshot file with the default rules::
 
-    findings = scan_file(path, DEFAULT_RULES)
+    findings = scan_file(path, DEFAULT_RULES, base_dir=repo_root)
 """
 
 from __future__ import annotations
@@ -17,15 +23,22 @@ from __future__ import annotations
 import collections
 import hashlib
 import math
-import pathlib
 import typing as typ
 
 from .rules import DEFAULT_RULES, Rule
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import pathlib
 
-__all__ = ["DEFAULT_RULES", "Finding", "Rule", "scan_file", "shannon_entropy"]
+__all__ = [
+    "DEFAULT_RULES",
+    "Finding",
+    "Rule",
+    "scan_file",
+    "scan_text",
+    "shannon_entropy",
+]
 
 
 class Finding(typ.NamedTuple):
@@ -74,9 +87,15 @@ def shannon_entropy(text: str) -> float:
 
 
 def _canonical_path(path: pathlib.Path, base_dir: pathlib.Path) -> str:
-    """Render *path* relative to *base_dir* when it lies within."""
-    resolved = path.resolve()
+    """Render *path* relative to *base_dir* when it lies within.
+
+    A relative *path* is anchored to *base_dir* rather than the process
+    working directory, so the canonical form is fully determined by the
+    two arguments and never shifts when the caller's ``cwd`` changes.
+    """
     base = base_dir.resolve()
+    anchored = path if path.is_absolute() else base / path
+    resolved = anchored.resolve()
     if resolved.is_relative_to(base):
         return resolved.relative_to(base).as_posix()
     return resolved.as_posix()
@@ -93,31 +112,33 @@ def _line_findings(line: str, rule: Rule) -> cabc.Iterator[str]:
         yield value
 
 
-def scan_file(
+def scan_text(
+    text: str,
     path: pathlib.Path,
     rules: cabc.Sequence[Rule],
     *,
-    base_dir: pathlib.Path | None = None,
+    base_dir: pathlib.Path,
 ) -> list[Finding]:
-    """Scan the ``.ambr`` file at *path* with *rules*.
+    r"""Scan snapshot *text* attributed to *path* with *rules*.
 
-    Control lines (column-zero ``#`` lines) carry block structure and
-    are never scanned; body lines are attributed to the most recent
-    ``# name:`` block. Reported paths are canonicalised against
-    *base_dir* (the working directory when omitted) so fingerprints do
-    not depend on how the scan is invoked. Read failures (``OSError``,
-    ``UnicodeDecodeError``) propagate to the caller; the CLI reports
-    them at its boundary.
+    This is the pure scanning core: it performs Amber block attribution
+    and rule matching over an in-memory string and never touches the
+    filesystem for *text*. Control lines (column-zero ``#`` lines) carry
+    block structure and are never scanned; body lines are attributed to
+    the most recent ``# name:`` block. Findings report *path*
+    canonicalised against *base_dir* (see :func:`_canonical_path`), so
+    the output is fully determined by the arguments and independent of
+    the process working directory.
 
     Examples
     --------
-    ``scan_file(pathlib.Path("__snapshots__/t.ambr"), DEFAULT_RULES)``
-    returns a list of findings in file order.
+    ``scan_text("# name: t\\n  alice@realcorp.io\\n",
+    pathlib.Path("t.ambr"), DEFAULT_RULES, base_dir=repo_root)`` returns
+    the email finding attributed to test ``t``.
     """
     findings: list[Finding] = []
     test_name = "<module>"
-    canonical = _canonical_path(path, base_dir or pathlib.Path.cwd())
-    text = path.read_text(encoding="utf-8")
+    canonical = _canonical_path(path, base_dir)
     for line_number, line in enumerate(text.splitlines(), start=1):
         if line.startswith("#"):
             if line.startswith("# name:"):
@@ -129,3 +150,27 @@ def scan_file(
             for value in _line_findings(line, rule)
         )
     return findings
+
+
+def scan_file(
+    path: pathlib.Path,
+    rules: cabc.Sequence[Rule],
+    *,
+    base_dir: pathlib.Path,
+) -> list[Finding]:
+    """Read the ``.ambr`` file at *path* and scan it with *rules*.
+
+    Thin filesystem boundary over :func:`scan_text`: it reads *path* as
+    UTF-8 and delegates all parsing and matching. *base_dir* is required
+    and injected explicitly so reported paths never depend on the
+    process working directory. Read failures (``OSError``,
+    ``UnicodeDecodeError``) propagate to the caller; the CLI reports them
+    at its boundary.
+
+    Examples
+    --------
+    ``scan_file(pathlib.Path("__snapshots__/t.ambr"), DEFAULT_RULES,
+    base_dir=repo_root)`` returns a list of findings in file order.
+    """
+    text = path.read_text(encoding="utf-8")
+    return scan_text(text, path, rules, base_dir=base_dir)

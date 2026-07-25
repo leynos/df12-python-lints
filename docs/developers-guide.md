@@ -32,10 +32,17 @@ The `ambrleaks` subpackage is a separate, standalone scanner exposed as its own
 console script, split into three modules: `rules.py` pairs each detection
 pattern with an optional entropy floor and allowlists, `scanner.py` walks
 `.ambr` files line by line and attributes findings to their `# name:` test
-block, and `cli.py` provides the command-line entry point. Suppression lives in
-external configuration and baseline files rather than inline markers, because
-syrupy rewrites `.ambr` files wholesale on `--snapshot-update` and would
-destroy any annotation.
+block, and `cli.py` provides the command-line entry point. Each module keeps a
+pure core behind a thin filesystem boundary so the reusable logic reads no
+files and never consults the working directory: `scanner.py` pairs the pure
+`scan_text` with the `scan_file` boundary, and `cli.py` pairs `parse_config`
+with `read_config` and `apply_baseline` with `read_baseline`. Both scanner
+entry points take an explicit `base_dir`; the CLI resolves it from the working
+directory once, at its own boundary, and injects it into scanning, so path
+canonicalization stays deterministic. Suppression lives in external
+configuration and baseline files rather than inline markers, because syrupy
+rewrites `.ambr` files wholesale on `--snapshot-update` and would destroy any
+annotation.
 
 ## Local workflow
 
@@ -124,8 +131,14 @@ The test suite is layered, so each verification tier runs at the right cadence:
   the checker's example suite.
 - **Symbolic model checks** (`make crosshair`) run CrossHair over the
   pure selection kernels in `df12_python_lints/_chains.py`, which carry PEP 316
-  contracts (`pre:`/`post:` docstring clauses). The search is budget-bounded
-  and opt-in; run it on changes to the kernels rather than on every push.
+  contracts (`pre:`/`post:` docstring clauses). The `pre:` clauses deliberately
+  bound the symbolic domain — short chains drawn from a two-symbol alphabet —
+  so the search can *confirm* every `post:` clause over all paths rather than
+  merely exhaust its budget. `tests/test_crosshair.py` requires those four
+  confirmations (one in `repeated_subject`, three in `narrowing_prefix`) and
+  treats a "Not confirmed" verdict as a failure; the bounds scope the proof
+  only, while the Hypothesis tier covers the unbounded runtime domain. The gate
+  is opt-in; run it on changes to the kernels rather than on every push.
 - **End-to-end shim tests** (part of `make test`,
   `tests/test_e2e_shim.py`) lint fixture modules through the pinned
   `leynos/pylint-pypy-shim` runner with the plugin loaded, proving every

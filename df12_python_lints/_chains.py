@@ -39,7 +39,17 @@ def repeated_subject(subject_sets: tuple[frozenset[str], ...]) -> str | None:
         The dispatched-on subject, or ``None`` when no subject appears
         in at least two sets.
 
-    pre: len(subject_sets) <= 6
+    The ``pre`` clauses bound CrossHair's symbolic domain to short chains
+    drawn from a two-symbol alphabet so it can *confirm* the ``post``
+    clause over every path rather than merely exhaust its budget. They
+    scope the proof, not the runtime input: production callers pass
+    arbitrary subject names, and Hypothesis exercises that unbounded
+    domain (see :mod:`tests.test_properties`). The two symbols still
+    span the behaviour that matters here — shared versus disjoint
+    subjects, and frequency ties broken lexically.
+
+    pre: len(subject_sets) <= 2
+    pre: all(s <= {"a", "b"} for s in subject_sets)
     post: __return__ is None or sum(__return__ in s for s in subject_sets) >= 2
 
     Examples
@@ -77,7 +87,13 @@ def narrowing_prefix(
         ``(0, frozenset())`` when the input is empty or starts with an
         empty set.
 
-    pre: len(subject_sets) <= 6
+    As with :func:`repeated_subject`, the ``pre`` clauses bound
+    CrossHair's symbolic domain to short chains over a two-symbol
+    alphabet so it can confirm every ``post`` clause over all paths;
+    they scope the proof, not the runtime input.
+
+    pre: len(subject_sets) <= 2
+    pre: all(s <= {"a", "b"} for s in subject_sets)
     post: __return__[0] <= len(subject_sets)
     post: all(__return__[1] <= s for s in subject_sets[: __return__[0]])
     post: __return__[0] == 0 or len(__return__[1]) > 0

@@ -8,7 +8,7 @@ import typing as typ
 from df12_python_lints.ambrleaks import DEFAULT_RULES, main, scan_file
 from df12_python_lints.ambrleaks.cli import (
     default_config,
-    load_config,
+    read_config,
     select_rules,
 )
 
@@ -50,7 +50,7 @@ class TestScanner:
     ) -> None:
         """Each unredacted value is reported against its test block."""
         path = write_snapshot(tmp_path, _SNAPSHOT)
-        findings = scan_file(path, DEFAULT_RULES)
+        findings = scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
         reported = {(f.rule_id, f.test_name) for f in findings}
         expected = {
             ("snapshot-email", "test_user"),
@@ -67,7 +67,7 @@ class TestScanner:
     ) -> None:
         """Example domains and low-entropy hex are not reported."""
         path = write_snapshot(tmp_path, _SNAPSHOT)
-        findings = scan_file(path, DEFAULT_RULES)
+        findings = scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
         clean_block = [f for f in findings if f.test_name == "test_clean"]
         assert not clean_block, "allowlisted and low-entropy values must pass"
 
@@ -84,7 +84,7 @@ class TestScanner:
             "# ---\n"
         )
         path = write_snapshot(tmp_path, content)
-        assert not scan_file(path, DEFAULT_RULES), (
+        assert not scan_file(path, DEFAULT_RULES, base_dir=tmp_path), (
             "control lines must not produce findings"
         )
 
@@ -96,13 +96,17 @@ class TestScanner:
         """The E.164 rule stays off by default and reports once enabled."""
         content = "# name: test_contact\n  'phone': '+442071234567'\n# ---\n"
         path = write_snapshot(tmp_path, content)
-        default_findings = scan_file(path, select_rules(default_config()))
+        default_findings = scan_file(
+            path, select_rules(default_config()), base_dir=tmp_path
+        )
         assert not default_findings, "phone detection must be opt-in"
         config_path = tmp_path / "ambrleaks.toml"
         config_path.write_text(
             "[rules.snapshot-phone]\nenabled = true\n", encoding="utf-8"
         )
-        enabled_findings = scan_file(path, select_rules(load_config(config_path)))
+        enabled_findings = scan_file(
+            path, select_rules(read_config(config_path)), base_dir=tmp_path
+        )
         reported = {(f.rule_id, f.value) for f in enabled_findings}
         assert ("snapshot-phone", "+442071234567") in reported, (
             "enabling the rule must report the phone number"
@@ -117,7 +121,10 @@ class TestScanner:
         uuid = "123e4567-e89b-12d3-a456-426614174000"
         content = f"# name: test_ids\n  'id': '{uuid}'\n# ---\n"
         path = write_snapshot(tmp_path, content)
-        reported = {(f.rule_id, f.value) for f in scan_file(path, DEFAULT_RULES)}
+        reported = {
+            (f.rule_id, f.value)
+            for f in scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
+        }
         assert ("snapshot-uuid", uuid) in reported, "UUID literals must be detected"
 
     def test_detects_windows_drive_path(
@@ -128,7 +135,10 @@ class TestScanner:
         """A drive-letter Windows path is reported by the Windows rule."""
         content = "# name: test_build\n  'out': 'D:\\build\\secret.txt'\n# ---\n"
         path = write_snapshot(tmp_path, content)
-        reported = {(f.rule_id, f.value) for f in scan_file(path, DEFAULT_RULES)}
+        reported = {
+            (f.rule_id, f.value)
+            for f in scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
+        }
         assert ("snapshot-windows-path", "D:\\build\\secret.txt") in reported, (
             "drive-letter paths must be detected"
         )
@@ -156,7 +166,7 @@ class TestCli:
         config_path.write_text(
             "[rules.snapshot-phone]\nenabled = true\n", encoding="utf-8"
         )
-        config = load_config(config_path)
+        config = read_config(config_path)
         rule_ids = {rule.rule_id for rule in select_rules(config)}
         assert "snapshot-phone" in rule_ids, "override must enable the rule"
 
@@ -274,7 +284,10 @@ class TestCli:
         """Any three-segment absolute POSIX path is detected."""
         content = "# name: test_paths\n  'key': '/data/uploads/key'\n# ---\n"
         path = write_snapshot(tmp_path, content)
-        reported = {(f.rule_id, f.value) for f in scan_file(path, DEFAULT_RULES)}
+        reported = {
+            (f.rule_id, f.value)
+            for f in scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
+        }
         assert ("snapshot-posix-path", "/data/uploads/key") in reported, (
             "absolute paths must be detected without a root allowlist"
         )
@@ -289,7 +302,7 @@ class TestCli:
         path = write_snapshot(tmp_path, content)
         findings = [
             f
-            for f in scan_file(path, DEFAULT_RULES)
+            for f in scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
             if f.rule_id == "snapshot-posix-path"
         ]
         assert findings == [], "short route fragments must not be reported"

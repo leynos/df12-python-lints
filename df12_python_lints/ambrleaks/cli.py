@@ -98,26 +98,27 @@ def _validate_allowlist(allowlist: object) -> None:
             raise ConfigError(message)
 
 
-def load_config(path: pathlib.Path | None) -> Config:
-    """Load *path* as TOML configuration, or defaults when ``None``.
+def parse_config(text: str) -> Config:
+    r"""Parse *text* as an ``ambrleaks`` TOML configuration.
+
+    This is the pure configuration core: it decodes and structurally
+    validates *text* without any filesystem access, so callers can test
+    it against literal TOML. :func:`read_config` is the filesystem
+    boundary that supplies *text* from a file.
 
     Raises
     ------
     ConfigError
         If the configuration is structurally invalid.
-    OSError
-        If the file cannot be read.
     tomllib.TOMLDecodeError
-        If the file is not valid TOML.
+        If *text* is not valid TOML.
 
     Examples
     --------
-    A file containing ``[rules.snapshot-phone]`` with ``enabled = true``
+    ``parse_config("[rules.snapshot-phone]\\nenabled = true\\n")``
     switches the phone rule on.
     """
-    if path is None:
-        return default_config()
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    data = tomllib.loads(text)
     rules = data.get("rules", {})
     allowlist = data.get("allowlist", {})
     _validate_rules(rules)
@@ -131,6 +132,36 @@ def load_config(path: pathlib.Path | None) -> Config:
         allow_tests=tuple(allowlist.get("tests", ())),
         allow_paths=tuple(allowlist.get("paths", ())),
     )
+
+
+def read_config(path: pathlib.Path | None) -> Config:
+    """Read *path* as TOML configuration, or defaults when ``None``.
+
+    Thin filesystem boundary over :func:`parse_config`: it reads *path*
+    as UTF-8 and delegates decoding and validation. Read and decode
+    failures propagate to the caller; the CLI reports them at its
+    boundary.
+
+    Raises
+    ------
+    ConfigError
+        If the configuration is structurally invalid.
+    OSError
+        If the file cannot be read.
+    UnicodeDecodeError
+        If the file is not valid UTF-8.
+    tomllib.TOMLDecodeError
+        If the file is not valid TOML.
+
+    Examples
+    --------
+    Given an ``ambrleaks.toml`` containing ``[rules.snapshot-phone]``
+    with ``enabled = true``, ``read_config(path)`` switches the phone
+    rule on.
+    """
+    if path is None:
+        return default_config()
+    return parse_config(path.read_text(encoding="utf-8"))
 
 
 def select_rules(config: Config) -> tuple[Rule, ...]:
@@ -222,10 +253,16 @@ def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _collect_findings(arguments: argparse.Namespace, config: Config) -> list[Finding]:
-    """Scan the requested paths and apply configuration allowlists."""
+def _collect_findings(
+    arguments: argparse.Namespace, config: Config, base_dir: pathlib.Path
+) -> list[Finding]:
+    """Scan the requested paths and apply configuration allowlists.
+
+    *base_dir* is the CLI's resolved base directory; it is injected into
+    every :func:`scan_file` call so scanning never derives paths from the
+    ambient working directory.
+    """
     rules = select_rules(config)
-    base_dir = pathlib.Path.cwd()
     findings = [
         finding
         for path in discover(arguments.paths)
@@ -234,27 +271,54 @@ def _collect_findings(arguments: argparse.Namespace, config: Config) -> list[Fin
     return [f for f in findings if not _is_allowed(f, config)]
 
 
-def _apply_baseline(
-    findings: list[Finding], baseline_path: pathlib.Path
+def apply_baseline(
+    findings: list[Finding], accepted: cabc.Mapping[str, int]
 ) -> list[Finding]:
-    """Drop findings the baseline accepts, one per recorded occurrence."""
-    accepted = collections.Counter(
-        json.loads(baseline_path.read_text(encoding="utf-8"))
-    )
+    """Drop findings the baseline accepts, one per recorded occurrence.
+
+    Pure counterpart to :func:`read_baseline`: *accepted* maps a
+    finding fingerprint to the number of occurrences the baseline
+    grandfathers. Each matching finding consumes one occurrence, so a
+    fingerprint recorded *n* times suppresses only the first *n*
+    findings and any beyond that still surface.
+
+    Examples
+    --------
+    With ``accepted`` counting a fingerprint once, the first finding
+    sharing it is dropped and a second identical finding is kept.
+    """
+    remaining_quota = collections.Counter(accepted)
     remaining: list[Finding] = []
     for finding in findings:
         fingerprint = finding.fingerprint()
-        if accepted[fingerprint] > 0:
-            accepted[fingerprint] -= 1
+        if remaining_quota[fingerprint] > 0:
+            remaining_quota[fingerprint] -= 1
         else:
             remaining.append(finding)
     return remaining
 
 
+def read_baseline(path: pathlib.Path) -> collections.Counter[str]:
+    """Read *path* as a JSON list of accepted finding fingerprints.
+
+    Thin filesystem boundary over :func:`apply_baseline`: it reads and
+    decodes the baseline, counting repeated fingerprints as repeated
+    occurrences. Read and decode failures propagate to the caller; the
+    CLI reports them at its boundary.
+    """
+    return collections.Counter(json.loads(path.read_text(encoding="utf-8")))
+
+
 def _run(arguments: argparse.Namespace) -> int:
-    """Execute the scan described by *arguments* and return an exit code."""
-    config = load_config(arguments.config or _default_config_path())
-    findings = _collect_findings(arguments, config)
+    """Execute the scan described by *arguments* and return an exit code.
+
+    The CLI resolves its base directory once here (the working directory
+    at invocation) and injects it into scanning, so the scanner core
+    never reads the ambient ``cwd`` itself.
+    """
+    config = read_config(arguments.config or _default_config_path())
+    base_dir = pathlib.Path.cwd()
+    findings = _collect_findings(arguments, config, base_dir)
     if arguments.write_baseline is not None:
         fingerprints = sorted(f.fingerprint() for f in findings)
         arguments.write_baseline.write_text(
@@ -263,7 +327,7 @@ def _run(arguments: argparse.Namespace) -> int:
         print(f"ambrleaks: baselined {len(fingerprints)} finding(s)")
         return 0
     if arguments.baseline is not None:
-        findings = _apply_baseline(findings, arguments.baseline)
+        findings = apply_baseline(findings, read_baseline(arguments.baseline))
     for finding in findings:
         print(
             f"{finding.path}:{finding.line}: [{finding.rule_id}] "
