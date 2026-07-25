@@ -44,6 +44,27 @@ class TestSnapshotAssertionChecker(testutils.CheckerTestCase):
 
     CHECKER_CLASS = SnapshotAssertionChecker
 
+    def _assert_flags_snapshot_assertion(self, code: str) -> None:
+        """Assert the marked assert in *code* draws the diagnostic.
+
+        Extracts the ``#@``-marked assertion and checks that visiting it
+        reports ``prefer-snapshot-assertion`` for that node.
+        """
+        node = _extract_assert(code)
+        message = testutils.MessageTest("prefer-snapshot-assertion", node=node)
+        with self.assertAddsMessages(message, ignore_position=True):
+            self.checker.visit_assert(node)
+
+    def _assert_function_stays_silent(self, code: str) -> None:
+        """Assert the marked function in *code* draws no messages.
+
+        Extracts the ``#@``-marked function definition and checks that
+        visiting it produces no diagnostics.
+        """
+        func = _extract_function(code)
+        with self.assertNoMessages():
+            self.checker.visit_functiondef(func)
+
     def test_flags_large_inline_dict(self) -> None:
         """Equality against a large dict literal is reported."""
         node = _extract_assert(_LARGE_DICT_TEST)
@@ -53,7 +74,7 @@ class TestSnapshotAssertionChecker(testutils.CheckerTestCase):
 
     def test_flags_multiline_string(self) -> None:
         """Equality against a multiline string is reported."""
-        node = _extract_assert(
+        self._assert_flags_snapshot_assertion(
             """
 def test_render(result):
     assert result == (  #@
@@ -64,13 +85,10 @@ def test_render(result):
     )
 """
         )
-        message = testutils.MessageTest("prefer-snapshot-assertion", node=node)
-        with self.assertAddsMessages(message, ignore_position=True):
-            self.checker.visit_assert(node)
 
     def test_flags_dedented_string(self) -> None:
         """A textwrap.dedent-wrapped multiline string is reported."""
-        node = _extract_assert(
+        self._assert_flags_snapshot_assertion(
             '''
 import textwrap
 
@@ -84,9 +102,6 @@ def test_render(result):
     )
 '''
         )
-        message = testutils.MessageTest("prefer-snapshot-assertion", node=node)
-        with self.assertAddsMessages(message, ignore_position=True):
-            self.checker.visit_assert(node)
 
     def test_ignores_small_literal(self) -> None:
         """A small inline literal is clearer inline than as a snapshot."""
@@ -139,19 +154,17 @@ def check_payload(result):
 
     def test_ignores_few_substring_probes(self) -> None:
         """Two probes on one subject are below the threshold."""
-        func = _extract_function(
+        self._assert_function_stays_silent(
             """
 def test_report(output):  #@
     assert "header" in output
     assert "footer" in output
 """
         )
-        with self.assertNoMessages():
-            self.checker.visit_functiondef(func)
 
     def test_ignores_probes_on_different_subjects(self) -> None:
         """Probes spread across subjects are not one contract."""
-        func = _extract_function(
+        self._assert_function_stays_silent(
             """
 def test_report(out, err):  #@
     assert "header" in out
@@ -159,8 +172,6 @@ def test_report(out, err):  #@
     assert "footer" in out
 """
         )
-        with self.assertNoMessages():
-            self.checker.visit_functiondef(func)
 
     def test_ignores_non_comparison_assert(self) -> None:
         """An assert without an equality comparison is not reported."""
