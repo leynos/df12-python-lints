@@ -35,6 +35,8 @@ from astroid import nodes
 from pylint import checkers
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from pylint.typing import MessageDefinitionTuple
 
 _MIN_LITERAL_LEAVES = 8
@@ -143,6 +145,29 @@ def _substring_probe_target(statement: nodes.Assert) -> str | None:
             return None
 
 
+def _direct_substring_probes(
+    function: nodes.FunctionDef,
+) -> cabc.Iterator[tuple[str, nodes.Assert]]:
+    """Yield ``(target, statement)`` for each direct substring probe.
+
+    A probe is an ``assert "fragment" in subject`` statement whose frame
+    is *function* itself, so probes belonging to a nested helper are
+    excluded. The target is the probed subject's source text.
+
+    Examples
+    --------
+    A ``test_`` body with ``assert "header" in output`` yields
+    ``("output", <Assert>)``; a probe inside a nested ``def`` is skipped.
+    """
+    for statement in function.nodes_of_class(nodes.Assert):
+        if statement.frame() is not function:
+            continue
+        target = _substring_probe_target(statement)
+        if target is None:
+            continue
+        yield target, statement
+
+
 class SnapshotAssertionChecker(checkers.BaseChecker):
     """Report assertions in tests that should be syrupy snapshots.
 
@@ -184,12 +209,7 @@ class SnapshotAssertionChecker(checkers.BaseChecker):
             return
         first_probe: dict[str, nodes.Assert] = {}
         counts: dict[str, int] = {}
-        for statement in node.nodes_of_class(nodes.Assert):
-            if statement.frame() is not node:
-                continue
-            target = _substring_probe_target(statement)
-            if target is None:
-                continue
+        for target, statement in _direct_substring_probes(node):
             first_probe.setdefault(target, statement)
             counts[target] = counts.get(target, 0) + 1
         for target, count in counts.items():

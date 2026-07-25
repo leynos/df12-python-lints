@@ -7,7 +7,10 @@ import typing as typ
 import astroid
 from pylint import testutils
 
-from df12_python_lints.snapshot_asserts import SnapshotAssertionChecker
+from df12_python_lints.snapshot_asserts import (
+    SnapshotAssertionChecker,
+    _direct_substring_probes,
+)
 
 
 def _extract_assert(code: str) -> astroid.nodes.Assert:
@@ -212,3 +215,39 @@ def test_outer(output):  #@
         )
         with self.assertNoMessages():
             self.checker.visit_functiondef(func)
+
+
+class TestDirectSubstringProbes:
+    """Exercise the extracted direct-probe traversal helper."""
+
+    def test_yields_each_direct_probe_with_its_subject(self) -> None:
+        """Every direct probe is yielded paired with its subject text."""
+        func = _extract_function(
+            """
+def test_report(output):  #@
+    assert "header" in output
+    assert "row 1" in output
+    assert "footer" in output
+"""
+        )
+        probes = list(_direct_substring_probes(func))
+        assert [target for target, _ in probes] == ["output", "output", "output"]
+        assert all(
+            isinstance(statement, astroid.nodes.Assert) for _, statement in probes
+        ), "each pair must carry its originating assert statement"
+
+    def test_excludes_probes_in_nested_helper(self) -> None:
+        """Probes belonging to a nested function's frame are skipped."""
+        func = _extract_function(
+            """
+def test_outer(output):  #@
+    def helper(inner):
+        assert "nested" in inner
+
+    assert "direct" in output
+    helper(output)
+"""
+        )
+        assert [target for target, _ in _direct_substring_probes(func)] == ["output"], (
+            "only the direct probe must be yielded"
+        )
