@@ -34,9 +34,29 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
 
     CHECKER_CLASS = MatchDispatchChecker
 
+    def _assert_if_dispatch_reported(self, code: str, subject: str) -> None:
+        """Assert that the marked if statement reports structural dispatch."""
+        node = _extract_if(code)
+        with self.assertAddsMessages(
+            _dispatch_message(node, subject), ignore_position=True
+        ):
+            self.checker.visit_if(node)
+
+    def _assert_no_if_dispatch(self, code: str) -> None:
+        """Assert that the marked if statement does not report dispatch."""
+        node = _extract_if(code)
+        with self.assertNoMessages():
+            self.checker.visit_if(node)
+
+    def _assert_no_guard_dispatch(self, code: str) -> None:
+        """Assert that the marked function does not report guard dispatch."""
+        func = _extract_function(code)
+        with self.assertNoMessages():
+            self.walk(func)
+
     def test_flags_isinstance_elif_chain(self) -> None:
         """An if/elif chain dispatching on one subject is reported."""
-        node = _extract_if(
+        self._assert_if_dispatch_reported(
             """
             def walk(value):
                 if isinstance(value, dict):  #@
@@ -44,16 +64,13 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
                 elif isinstance(value, list):
                     return 2
                 return 3
-            """
+            """,
+            "value",
         )
-        with self.assertAddsMessages(
-            _dispatch_message(node, "value"), ignore_position=True
-        ):
-            self.checker.visit_if(node)
 
     def test_flags_compound_isinstance_tests(self) -> None:
         """Compound conditions still contribute their isinstance subject."""
-        node = _extract_if(
+        self._assert_if_dispatch_reported(
             """
             def check(value):
                 if isinstance(value, dict) and value:  #@
@@ -61,12 +78,9 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
                 elif isinstance(value, list) and len(value) > 1:
                     return 2
                 return 3
-            """
+            """,
+            "value",
         )
-        with self.assertAddsMessages(
-            _dispatch_message(node, "value"), ignore_position=True
-        ):
-            self.checker.visit_if(node)
 
     def test_flags_consecutive_guard_ifs(self) -> None:
         """Sequential terminating guards on one subject are reported once."""
@@ -88,7 +102,7 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
 
     def test_ignores_single_isinstance_branch(self) -> None:
         """A lone isinstance test with an else block is not dispatch."""
-        node = _extract_if(
+        self._assert_no_if_dispatch(
             """
             def check(value):
                 if isinstance(value, str):  #@
@@ -97,12 +111,10 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
                     return None
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_if(node)
 
     def test_ignores_guards_on_different_subjects(self) -> None:
         """Guards testing different subjects are unrelated, not dispatch."""
-        func = _extract_function(
+        self._assert_no_guard_dispatch(
             """
             def check(left, right):  #@
                 if isinstance(left, dict):
@@ -112,12 +124,10 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
                 return 3
             """
         )
-        with self.assertNoMessages():
-            self.walk(func)
 
     def test_ignores_non_terminating_guards(self) -> None:
         """Guards whose bodies fall through are not exclusive branches."""
-        func = _extract_function(
+        self._assert_no_guard_dispatch(
             """
             def check(value):  #@
                 if isinstance(value, dict):
@@ -127,12 +137,10 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
                 return value
             """
         )
-        with self.assertNoMessages():
-            self.walk(func)
 
     def test_ignores_chain_without_repeated_subject(self) -> None:
         """An elif chain with one isinstance branch is not dispatch."""
-        node = _extract_if(
+        self._assert_no_if_dispatch(
             """
             def check(value, flag):
                 if isinstance(value, dict):  #@
@@ -142,5 +150,3 @@ class TestMatchDispatchChecker(testutils.CheckerTestCase):
                 return 3
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_if(node)
