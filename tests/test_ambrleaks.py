@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import typing as typ
 
+import pytest
+
 from df12_python_lints.ambrleaks import DEFAULT_RULES, main, scan_file
 from df12_python_lints.ambrleaks.cli import (
     default_config,
@@ -15,8 +17,6 @@ from df12_python_lints.ambrleaks.cli import (
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
-
-    import pytest
 
 _HIGH_ENTROPY_HEX = "0123456789abcdef0123456789abcdef"
 
@@ -127,20 +127,43 @@ class TestScanner:
         }
         assert ("snapshot-uuid", uuid) in reported, "UUID literals must be detected"
 
-    def test_detects_windows_drive_path(
+    @pytest.mark.parametrize(
+        ("content", "expected"),
+        [
+            pytest.param(
+                "# name: test_build\n  'out': 'D:\\build\\secret.txt'\n# ---\n",
+                ("snapshot-windows-path", "D:\\build\\secret.txt"),
+                id="windows-drive-path",
+            ),
+            pytest.param(
+                "# name: test_paths\n  'key': '/data/uploads/key'\n# ---\n",
+                ("snapshot-posix-path", "/data/uploads/key"),
+                id="posix-path-unlisted-root",
+            ),
+        ],
+    )
+    def test_detects_absolute_path(
         self,
         tmp_path: pathlib.Path,
         write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+        content: str,
+        expected: tuple[str, str],
     ) -> None:
-        """A drive-letter Windows path is reported by the Windows rule."""
-        content = "# name: test_build\n  'out': 'D:\\build\\secret.txt'\n# ---\n"
+        """An absolute path literal is reported by its platform rule.
+
+        Each case pairs the Amber body with its expected
+        ``(rule_id, leaked_value)``: a drive-letter Windows path
+        (``snapshot-windows-path``) and a three-segment absolute POSIX
+        path (``snapshot-posix-path``); the POSIX case proves detection
+        does not rely on a root allowlist.
+        """
         path = write_snapshot(tmp_path, content)
         reported = {
-            (f.rule_id, f.value)
-            for f in scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
+            (finding.rule_id, finding.value)
+            for finding in scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
         }
-        assert ("snapshot-windows-path", "D:\\build\\secret.txt") in reported, (
-            "drive-letter paths must be detected"
+        assert expected in reported, (
+            "absolute path literals must be detected by their platform rule"
         )
 
 
@@ -275,22 +298,6 @@ class TestCli:
         )
         reported = capsys.readouterr().out.strip().splitlines()
         assert len(reported) == 1, "exactly the surplus occurrence must be reported"
-
-    def test_detects_posix_path_with_unlisted_root(
-        self,
-        tmp_path: pathlib.Path,
-        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
-    ) -> None:
-        """Any three-segment absolute POSIX path is detected."""
-        content = "# name: test_paths\n  'key': '/data/uploads/key'\n# ---\n"
-        path = write_snapshot(tmp_path, content)
-        reported = {
-            (f.rule_id, f.value)
-            for f in scan_file(path, DEFAULT_RULES, base_dir=tmp_path)
-        }
-        assert ("snapshot-posix-path", "/data/uploads/key") in reported, (
-            "absolute paths must be detected without a root allowlist"
-        )
 
     def test_ignores_short_route_fragments(
         self,
