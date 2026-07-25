@@ -39,147 +39,151 @@ class TestTypeAliasChecker(testutils.CheckerTestCase):
 
     CHECKER_CLASS = TypeAliasChecker
 
+    def _assert_assign_alias_reported(self, code: str, target: str) -> None:
+        """Assert that the marked assignment reports a type alias."""
+        node = _extract_assign(code)
+        with self.assertAddsMessages(
+            _alias_message(node, target), ignore_position=True
+        ):
+            self.checker.visit_assign(node)
+
+    def _assert_annassign_alias_reported(self, code: str, target: str) -> None:
+        """Assert that the marked annotated assignment reports a type alias."""
+        node = _extract_annassign(code)
+        with self.assertAddsMessages(
+            _alias_message(node, target), ignore_position=True
+        ):
+            self.checker.visit_annassign(node)
+
+    def _assert_no_assign_alias_diagnostic(self, code: str) -> None:
+        """Assert that the marked assignment produces no type-alias diagnostic."""
+        node = _extract_assign(code)
+        with self.assertNoMessages():
+            self.checker.visit_assign(node)
+
+    def _assert_no_annassign_alias_diagnostic(self, code: str) -> None:
+        """Assert that the marked annotated assignment is not a type alias."""
+        node = _extract_annassign(code)
+        with self.assertNoMessages():
+            self.checker.visit_annassign(node)
+
     @set_config(py_version=(3, 14))
     def test_flags_aliased_module_subscript(self) -> None:
         """A collections.abc subscript under a module alias is reported."""
-        node = _extract_assign(
+        self._assert_assign_alias_reported(
             """
             import collections.abc as cabc
             import datetime as dt
 
             Clock = cabc.Callable[[], dt.datetime]  #@
-            """
+            """,
+            "Clock",
         )
-        with self.assertAddsMessages(
-            _alias_message(node, "Clock"), ignore_position=True
-        ):
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_flags_from_imported_subscript(self) -> None:
         """A from-imported typing construct subscript is reported."""
-        node = _extract_assign(
+        self._assert_assign_alias_reported(
             """
             from typing import Callable
 
             Handler = Callable[[str], None]  #@
-            """
+            """,
+            "Handler",
         )
-        with self.assertAddsMessages(
-            _alias_message(node, "Handler"), ignore_position=True
-        ):
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_flags_dotted_import_subscript(self) -> None:
         """A subscript reached through a plain dotted import is reported."""
-        node = _extract_assign(
+        self._assert_assign_alias_reported(
             """
             import collections.abc
 
             Producer = collections.abc.Iterator[int]  #@
-            """
+            """,
+            "Producer",
         )
-        with self.assertAddsMessages(
-            _alias_message(node, "Producer"), ignore_position=True
-        ):
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_flags_builtin_generic_subscript(self) -> None:
         """A subscripted builtin generic such as ``dict`` is reported."""
-        node = _extract_assign("Registry = dict[str, int]  #@")
-        with self.assertAddsMessages(
-            _alias_message(node, "Registry"), ignore_position=True
-        ):
-            self.checker.visit_assign(node)
+        self._assert_assign_alias_reported(
+            "Registry = dict[str, int]  #@",
+            "Registry",
+        )
 
     @set_config(py_version=(3, 14))
     def test_flags_type_alias_annotation(self) -> None:
         """A ``TypeAlias``-annotated assignment is reported."""
-        node = _extract_annassign(
+        self._assert_annassign_alias_reported(
             """
             from typing import TypeAlias
 
             Pair: TypeAlias = "tuple[int, int]"  #@
-            """
+            """,
+            "Pair",
         )
-        with self.assertAddsMessages(
-            _alias_message(node, "Pair"), ignore_position=True
-        ):
-            self.checker.visit_annassign(node)
 
     @set_config(py_version=(3, 14))
     def test_flags_dotted_type_alias_annotation(self) -> None:
         """A ``typ.TypeAlias`` annotation under an alias is reported."""
-        node = _extract_annassign(
+        self._assert_annassign_alias_reported(
             """
             import typing as typ
 
             Pair: typ.TypeAlias = "tuple[int, int]"  #@
-            """
+            """,
+            "Pair",
         )
-        with self.assertAddsMessages(
-            _alias_message(node, "Pair"), ignore_position=True
-        ):
-            self.checker.visit_annassign(node)
 
     @set_config(py_version=(3, 11))
     def test_silent_below_baseline(self) -> None:
         """Nothing is reported when the baseline predates PEP 695."""
-        node = _extract_assign(
+        self._assert_no_assign_alias_diagnostic(
             """
             import collections.abc as cabc
 
             Clock = cabc.Callable[[], float]  #@
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_ignores_value_subscript(self) -> None:
         """Indexing a runtime value is not an alias."""
-        node = _extract_assign(
+        self._assert_no_assign_alias_diagnostic(
             """
             matrix = [[1, 2], [3, 4]]
 
             row = matrix[0]  #@
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_ignores_non_typing_module_subscript(self) -> None:
         """Subscripting an unrelated module's attribute is not an alias."""
-        node = _extract_assign(
+        self._assert_no_assign_alias_diagnostic(
             """
             import numpy as np
 
             Array = np.ndarray[float]  #@
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_ignores_shadowed_builtin(self) -> None:
         """A rebinding of ``dict`` disqualifies the builtin-generic path."""
-        node = _extract_assign(
+        self._assert_no_assign_alias_diagnostic(
             """
             dict = {"a": object}
 
             Registry = dict["a"]  #@
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_ignores_function_scope_subscript(self) -> None:
         """Bindings inside a function are locals, not module aliases."""
-        node = _extract_assign(
+        self._assert_no_assign_alias_diagnostic(
             """
             from typing import Callable
 
@@ -188,26 +192,22 @@ class TestTypeAliasChecker(testutils.CheckerTestCase):
                 return handler
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_assign(node)
 
     @set_config(py_version=(3, 14))
     def test_ignores_plain_annotated_assignment(self) -> None:
         """An ordinary annotation such as ``Final`` is not an alias."""
-        node = _extract_annassign(
+        self._assert_no_annassign_alias_diagnostic(
             """
             import typing as typ
 
             LIMIT: typ.Final[int] = 10  #@
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_annassign(node)
 
     @set_config(py_version=(3, 14))
     def test_ignores_unannotated_union_value(self) -> None:
         """A bare PEP 604 union stays unreported; it may be a value."""
-        node = _extract_assign(
+        self._assert_no_assign_alias_diagnostic(
             """
             A = {1}
             B = {2}
@@ -215,8 +215,6 @@ class TestTypeAliasChecker(testutils.CheckerTestCase):
             merged = A | B  #@
             """
         )
-        with self.assertNoMessages():
-            self.checker.visit_assign(node)
 
 
 class TestAssignmentImportOrigin:
