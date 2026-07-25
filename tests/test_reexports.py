@@ -25,33 +25,35 @@ class TestReexportAssignmentChecker(testutils.CheckerTestCase):
 
     CHECKER_CLASS = ReexportAssignmentChecker
 
+    def _assert_reexport_reported(self, code: str, target: str) -> None:
+        """Assert that the marked assignment reports a re-export."""
+        node = _extract_assign(code)
+        with self.assertAddsMessages(
+            _reexport_message(node, target), ignore_position=True
+        ):
+            self.checker.visit_assign(node)
+
     def test_flags_module_attribute_alias(self) -> None:
         """Aliasing an attribute of an imported module is reported."""
-        node = _extract_assign(
+        self._assert_reexport_reported(
             """
             import os.path
 
             join = os.path.join  #@
-            """
+            """,
+            "join",
         )
-        with self.assertAddsMessages(
-            _reexport_message(node, "join"), ignore_position=True
-        ):
-            self.checker.visit_assign(node)
 
     def test_flags_imported_name_alias(self) -> None:
         """Aliasing a from-imported name is reported."""
-        node = _extract_assign(
+        self._assert_reexport_reported(
             """
             from json import dumps
 
             serialize = dumps  #@
-            """
+            """,
+            "serialize",
         )
-        with self.assertAddsMessages(
-            _reexport_message(node, "serialize"), ignore_position=True
-        ):
-            self.checker.visit_assign(node)
 
     def test_ignores_call_result(self) -> None:
         """Binding a call result is configuration, not re-export."""
