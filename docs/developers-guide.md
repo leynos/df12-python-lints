@@ -39,14 +39,14 @@ pattern with an optional entropy floor and allowlists, `scanner.py` walks
 `.ambr` files line by line and attributes findings to their `# name:` test
 block, `config.py` holds the `Config` model and its parser, and `cli.py`
 provides the command-line entry point. Each module keeps a pure core behind a
-thin filesystem boundary so the reusable logic reads no files and never
+thin filesystem boundary, so the reusable logic reads no files and never
 consults the working directory: `scanner.py` pairs the pure `scan_text` with the
 `scan_file` boundary, `config.py` pairs the pure `parse_config` with the
 `read_config` boundary, and `cli.py` pairs `apply_baseline` with
 `read_baseline`. Both scanner entry points take an explicit `base_dir`; the CLI
 resolves it from the working directory once, at its own boundary, and injects
 it into scanning, so path canonicalization stays deterministic. Suppression
-lives in external configuration and baseline files rather than inline markers,
+lives in external configuration and baseline files rather than inline markers
 because syrupy rewrites `.ambr` files wholesale on `--snapshot-update` and
 would destroy any annotation.
 

@@ -237,7 +237,8 @@ reports can be shared safely, such as in CI logs; pass `--show-values` to print
 the full unredacted value. Pass `-v` / `--verbose` to log the configuration,
 scan, and baseline boundaries to stderr; these logs are silent otherwise.
 
-Exit status is `0` for a clean tree and `1` when findings remain.
+Exit status is `0` for a clean tree, `1` when findings remain, and `2` for a
+configuration, I/O, TOML, JSON, or decoding error.
 
 ### Suppressing Findings
 
