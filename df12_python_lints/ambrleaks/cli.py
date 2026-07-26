@@ -283,12 +283,7 @@ def _count_stream(
 
 
 def _print_findings(findings: cabc.Iterable[Finding], *, show_values: bool) -> int:
-    """Print each finding as it arrives and return how many were printed.
-
-    Consuming *findings* lazily keeps the streaming scan end-to-end: a
-    finding is printed as its file is scanned rather than after the whole
-    set is collected. The value is masked unless *show_values* is set.
-    """
+    """Print each streamed finding and return how many were printed."""
     reported = 0
     for finding in findings:
         reported += 1
