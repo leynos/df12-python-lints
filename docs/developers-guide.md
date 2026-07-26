@@ -49,6 +49,22 @@ configuration and baseline files rather than inline markers, because syrupy
 rewrites `.ambr` files wholesale on `--snapshot-update` and would destroy any
 annotation.
 
+### Observability
+
+`ambrleaks` deliberately carries no structured logging, metrics, tracing, or
+alerting. It is a synchronous, single-shot lint-style CLI — the same class of
+tool as `ruff`, `pylint`, or `grep` — with no long-running process, network
+calls, or shared mutable state to instrument. Its operational contract is the
+process result itself: an exit status (`0` clean, `1` findings remain, `2` a
+configuration, I/O, or decode error), one line per finding on stdout (each
+tagged with its rule id), a finding-count summary and any `ambrleaks: error:`
+message on stderr. The invoking shell or CI job captures that status and
+output, which is the appropriate and sufficient signal for a deterministic
+batch scanner; adding a logging or metrics stack here would add dependencies
+and noise without an operational surface to observe. If `ambrleaks` ever grows
+a long-running or service mode, revisit this decision and instrument the scan,
+configuration, and baseline boundaries then.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and
