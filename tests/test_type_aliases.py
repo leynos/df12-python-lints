@@ -228,6 +228,41 @@ class TestTypeAliasChecker(testutils.CheckerTestCase):
             """
         )
 
+    @set_config(py_version=(3, 11))
+    def test_annassign_silent_below_baseline(self) -> None:
+        """No annotated alias is reported when the baseline predates PEP 695."""
+        self._assert_no_annassign_alias_diagnostic(
+            """
+            from typing import TypeAlias
+
+            Pair: TypeAlias = "tuple[int, int]"  #@
+            """
+        )
+
+    @set_config(py_version=(3, 14))
+    def test_ignores_bare_annotation_without_value(self) -> None:
+        """An annotation with no assigned value is not a type alias."""
+        self._assert_no_annassign_alias_diagnostic("Pair: TypeAlias  #@")
+
+    @set_config(py_version=(3, 14))
+    def test_ignores_unimported_alias_annotation(self) -> None:
+        """A ``TypeAlias`` annotation from no import resolves to nothing."""
+        self._assert_no_annassign_alias_diagnostic(
+            'Pair: TypeAlias = "tuple[int, int]"  #@'
+        )
+
+    @set_config(py_version=(3, 14))
+    def test_ignores_subscript_of_call_result(self) -> None:
+        """Subscripting a call result is not a typing construct."""
+        self._assert_no_assign_alias_diagnostic(
+            """
+            def make():
+                return list
+
+            Registry = make()[str]  #@
+            """
+        )
+
 
 class TestAssignmentImportOrigin:
     """Exercise the extracted per-assignment import classifier directly."""

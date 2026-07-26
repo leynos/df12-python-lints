@@ -145,6 +145,23 @@ def check_payload(result):
         with self.assertNoMessages():
             self.checker.visit_assert(node)
 
+    def test_ignores_numeric_equality(self) -> None:
+        """Equality against a plain number is never snapshot-worthy."""
+        node = _extract_assert(
+            """
+def test_count(result):
+    assert result == 5  #@
+"""
+        )
+        with self.assertNoMessages():
+            self.checker.visit_assert(node)
+
+    def test_ignores_module_level_assert(self) -> None:
+        """An assert outside any function frame is not reported."""
+        node = _extract_assert("assert result == 5  #@")
+        with self.assertNoMessages():
+            self.checker.visit_assert(node)
+
     def test_flags_repeated_substring_probes(self) -> None:
         """Three substring asserts on one subject are reported once."""
         func = _extract_function(_SUBSTRING_TEST)
