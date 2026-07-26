@@ -276,6 +276,28 @@ class TestWriteBaseline:
             "an empty baseline must be a valid empty JSON array"
         )
 
+    def test_write_failure_removes_temp_file_and_propagates(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A mid-write failure leaves no baseline or temporary file behind."""
+        finding = self._finding()
+
+        class _WriteError(Exception):
+            """Marker error raised while the baseline is being written."""
+
+        def _source() -> cabc.Iterator[Finding]:
+            """Yield one finding, then fail before the stream completes."""
+            yield finding
+            raise _WriteError
+
+        out = tmp_path / "baseline.json"
+        with pytest.raises(_WriteError):
+            write_baseline(out, _source())
+        assert not out.exists(), "a failed write must not leave a baseline file"
+        assert not list(tmp_path.iterdir()), (
+            "the temporary file must be removed when the write fails"
+        )
+
 
 class TestMaskedValue:
     """Exercise the default finding-value masking."""
