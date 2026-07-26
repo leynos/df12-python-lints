@@ -231,7 +231,9 @@ def test_report(output):  #@
 """
         )
         probes = list(_direct_substring_probes(func))
-        assert [target for target, _ in probes] == ["output", "output", "output"]
+        assert [target for target, _ in probes] == ["output", "output", "output"], (
+            "each direct probe must be yielded with its subject in order"
+        )
         assert all(
             isinstance(statement, astroid.nodes.Assert) for _, statement in probes
         ), "each pair must carry its originating assert statement"

@@ -21,6 +21,7 @@ import pytest
 from df12_python_lints.ambrleaks import DEFAULT_RULES, Finding, scan_file, scan_text
 from df12_python_lints.ambrleaks.cli import (
     ConfigError,
+    _masked_value,
     apply_baseline,
     default_config,
     parse_config,
@@ -210,3 +211,17 @@ class TestApplyBaseline:
         assert accepted[finding.fingerprint()] == 2, (
             "apply_baseline must not consume the caller's counts"
         )
+
+
+class TestMaskedValue:
+    """Exercise the default finding-value masking."""
+
+    def test_masks_interior_of_a_long_value(self) -> None:
+        """Only the first and last character of a long value survive."""
+        assert _masked_value("alice@realcorp.io") == "a***************o", (
+            "the interior of a long value must be masked"
+        )
+
+    def test_masks_a_short_value_entirely(self) -> None:
+        """A value of three characters or fewer reveals nothing."""
+        assert _masked_value("ab") == "**", "short values must be fully masked"

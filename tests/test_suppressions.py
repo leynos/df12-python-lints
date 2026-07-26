@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import tokenize
 
+import pytest
 from pylint import testutils
 
 from df12_python_lints.suppressions import SuppressionCommentChecker
@@ -30,34 +31,37 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
 
     CHECKER_CLASS = SuppressionCommentChecker
 
-    def test_flags_bare_noqa(self) -> None:
-        """A noqa pragma without a reason is reported."""
-        code = "x = 1  # noqa: E501\n"
-        with self.assertAddsMessages(_lint_message(1), ignore_position=True):
-            self.checker.process_tokens(_tokens(code))
-
-    def test_flags_bare_pylint_disable(self) -> None:
-        """A pylint disable pragma without a reason is reported."""
-        code = "# pylint: disable=too-many-branches\nx = 1\n"
-        with self.assertAddsMessages(_lint_message(1), ignore_position=True):
-            self.checker.process_tokens(_tokens(code))
-
-    def test_flags_uppercase_pylint_disable(self) -> None:
-        """An uppercase pylint disable pragma without a reason is reported."""
-        code = "# PYLINT: DISABLE=too-many-branches\nx = 1\n"
-        with self.assertAddsMessages(_lint_message(1), ignore_position=True):
-            self.checker.process_tokens(_tokens(code))
-
-    def test_flags_bare_type_ignore(self) -> None:
-        """A type-ignore pragma without a reason is reported."""
-        code = "y = obj.attr  # type: ignore[attr-defined]\n"
-        with self.assertAddsMessages(_type_message(1), ignore_position=True):
-            self.checker.process_tokens(_tokens(code))
-
-    def test_flags_bare_pyright_ignore(self) -> None:
-        """A pyright ignore pragma without a reason is reported."""
-        code = "y = obj.attr  # pyright: ignore[reportAny]\n"
-        with self.assertAddsMessages(_type_message(1), ignore_position=True):
+    @pytest.mark.parametrize(
+        ("code", "message"),
+        [
+            pytest.param("x = 1  # noqa: E501\n", _lint_message(1), id="bare-noqa"),
+            pytest.param(
+                "# pylint: disable=too-many-branches\nx = 1\n",
+                _lint_message(1),
+                id="bare-pylint-disable",
+            ),
+            pytest.param(
+                "# PYLINT: DISABLE=too-many-branches\nx = 1\n",
+                _lint_message(1),
+                id="uppercase-pylint-disable",
+            ),
+            pytest.param(
+                "y = obj.attr  # type: ignore[attr-defined]\n",
+                _type_message(1),
+                id="bare-type-ignore",
+            ),
+            pytest.param(
+                "y = obj.attr  # pyright: ignore[reportAny]\n",
+                _type_message(1),
+                id="bare-pyright-ignore",
+            ),
+        ],
+    )
+    def test_flags_bare_pragma_without_explanation(
+        self, code: str, message: testutils.MessageTest
+    ) -> None:
+        """A suppression pragma without a recorded reason is reported."""
+        with self.assertAddsMessages(message, ignore_position=True):
             self.checker.process_tokens(_tokens(code))
 
     def test_accepts_second_hash_explanation(self) -> None:

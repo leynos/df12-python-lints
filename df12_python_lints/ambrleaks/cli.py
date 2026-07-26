@@ -256,6 +256,14 @@ def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
         default=None,
         help="write the current findings as a baseline and exit",
     )
+    parser.add_argument(
+        "--show-values",
+        action="store_true",
+        help=(
+            "print each finding's full value; by default the value is "
+            "masked so a scan report does not reproduce the secret"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -315,6 +323,28 @@ def read_baseline(path: pathlib.Path) -> collections.Counter[str]:
     return collections.Counter(json.loads(path.read_text(encoding="utf-8")))
 
 
+_MIN_MASK_PREVIEW_LENGTH: typ.Final = 4
+
+
+def _masked_value(value: str) -> str:
+    """Return a masked preview of *value* for default output.
+
+    Reveals only the first and last character of a value and masks the
+    interior, so a scan report does not reproduce an unredacted secret
+    verbatim (for example in shared CI logs). Values shorter than
+    :data:`_MIN_MASK_PREVIEW_LENGTH` (four) characters are masked
+    entirely. The full value is printed only under ``--show-values``.
+
+    Examples
+    --------
+    ``"alice@realcorp.io"`` renders as ``"a***************o"``; ``"ab"``
+    renders as ``"**"``.
+    """
+    if len(value) < _MIN_MASK_PREVIEW_LENGTH:
+        return "*" * len(value)
+    return f"{value[0]}{'*' * (len(value) - 2)}{value[-1]}"
+
+
 def _run(arguments: argparse.Namespace) -> int:
     """Execute the scan described by *arguments* and return an exit code.
 
@@ -335,9 +365,10 @@ def _run(arguments: argparse.Namespace) -> int:
     if arguments.baseline is not None:
         findings = apply_baseline(findings, read_baseline(arguments.baseline))
     for finding in findings:
+        value = finding.value if arguments.show_values else _masked_value(finding.value)
         print(
             f"{finding.path}:{finding.line}: [{finding.rule_id}] "
-            f"{finding.test_name}: {finding.value}"
+            f"{finding.test_name}: {value}"
         )
     if findings:
         print(f"ambrleaks: {len(findings)} finding(s)", file=sys.stderr)

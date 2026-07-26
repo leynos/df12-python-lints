@@ -101,8 +101,8 @@ Twelve pylint messages:
 - `prefer-type-statement` (R9111) — module-level type aliases should use
   the PEP 695 `type` statement on a 3.12+ baseline.
 - `redundant-future-annotations` (C9112) — `from __future__ import annotations`
-  should be removed on a 3.14+ baseline, where deferred
-  evaluation is the default.
+  should be removed on a 3.14+ baseline, where deferred evaluation is the
+  default.
 
 Both baseline-gated messages respect pylint's `py-version` option.
 

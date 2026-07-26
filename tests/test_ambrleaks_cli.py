@@ -174,3 +174,39 @@ class TestScanBoundaries:
         assert all(
             finding.path == "__snapshots__/test_demo.ambr" for finding in findings
         ), "paths must be rendered relative to the injected base directory"
+
+
+class TestValueMasking:
+    """Exercise masked-by-default finding output and the opt-in flag."""
+
+    def test_masks_finding_value_by_default(
+        self,
+        tmp_path: pathlib.Path,
+        capsys: pytest.CaptureFixture[str],
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """The unredacted value is not printed; a masked preview is."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        assert main([str(tmp_path)]) == 1, "the seeded snapshot must produce findings"
+        out = capsys.readouterr().out
+        assert "alice@realcorp.io" not in out, (
+            "the unredacted value must not appear in default output"
+        )
+        assert "a***************o" in out, (
+            "a masked preview of the value must be printed"
+        )
+
+    def test_show_values_reveals_the_full_value(
+        self,
+        tmp_path: pathlib.Path,
+        capsys: pytest.CaptureFixture[str],
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """``--show-values`` prints the full unredacted value."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        assert main([str(tmp_path), "--show-values"]) == 1, (
+            "the seeded snapshot must produce findings"
+        )
+        assert "alice@realcorp.io" in capsys.readouterr().out, (
+            "--show-values must print the unredacted value"
+        )

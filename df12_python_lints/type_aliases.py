@@ -259,6 +259,13 @@ class TypeAliasChecker(checkers.BaseChecker):
     The check is inert until the configured ``py-version`` reaches 3.12,
     the first release with PEP 695 ``type`` statements.
 
+    Attributes
+    ----------
+    name : str
+        The checker identifier, ``df12-type-aliases``.
+    msgs : dict[str, MessageDefinitionTuple]
+        The R9111 ``prefer-type-statement`` message.
+
     Examples
     --------
     Enable alongside the plugin and run pylint as usual::
@@ -282,10 +289,10 @@ class TypeAliasChecker(checkers.BaseChecker):
         """
         if not self._type_statement_available():
             return
-        if not isinstance(node.scope(), nodes.Module):
-            return
         match node.targets:
-            case [nodes.AssignName(name=target_name)]:
+            case [nodes.AssignName(name=target_name)] if isinstance(
+                node.scope(), nodes.Module
+            ):
                 pass
             case _:
                 return
@@ -301,11 +308,12 @@ class TypeAliasChecker(checkers.BaseChecker):
         """
         if not self._type_statement_available():
             return
-        if not isinstance(node.scope(), nodes.Module):
-            return
-        if node.value is None or not isinstance(node.target, nodes.AssignName):
-            return
+        match node.target:
+            case nodes.AssignName(name=target_name) if (
+                node.value is not None and isinstance(node.scope(), nodes.Module)
+            ):
+                pass
+            case _:
+                return
         if _is_type_alias_annotation(node.annotation):
-            self.add_message(
-                "prefer-type-statement", node=node, args=(node.target.name,)
-            )
+            self.add_message("prefer-type-statement", node=node, args=(target_name,))

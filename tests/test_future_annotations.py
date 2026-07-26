@@ -5,6 +5,7 @@ from __future__ import annotations
 import typing as typ
 
 import astroid
+import pytest
 from pylint import testutils
 from pylint.testutils import set_config
 
@@ -21,19 +22,19 @@ class TestFutureAnnotationsChecker(testutils.CheckerTestCase):
 
     CHECKER_CLASS = FutureAnnotationsChecker
 
-    @set_config(py_version=(3, 14))
-    def test_flags_future_annotations_on_modern_baseline(self) -> None:
-        """The future import is reported once the baseline reaches 3.14."""
-        node = _extract_importfrom("from __future__ import annotations  #@")
-        with self.assertAddsMessages(
-            testutils.MessageTest("redundant-future-annotations", node=node),
-            ignore_position=True,
-        ):
-            self.checker.visit_importfrom(node)
+    @pytest.mark.parametrize("py_version", [(3, 14), (3, 15)])
+    def test_flags_future_annotations_on_modern_baseline(
+        self, py_version: tuple[int, int]
+    ) -> None:
+        """The future import is reported on 3.14 and later baselines.
 
-    @set_config(py_version=(3, 15))
-    def test_flags_on_later_baselines_too(self) -> None:
-        """Baselines beyond 3.14 keep reporting the import."""
+        ``set_config`` cannot supply a parametrized ``py_version`` (its
+        value is bound at decoration time), so the baseline is applied
+        through the same ``linter.set_option`` / ``checker.open`` sequence
+        that ``set_config`` performs.
+        """
+        self.linter.set_option("py_version", py_version)
+        self.checker.open()
         node = _extract_importfrom("from __future__ import annotations  #@")
         with self.assertAddsMessages(
             testutils.MessageTest("redundant-future-annotations", node=node),

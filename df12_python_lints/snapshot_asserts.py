@@ -89,9 +89,14 @@ def _is_large_string(value: object) -> bool:
     --------
     A four-line expected report qualifies; ``"short"`` does not.
     """
-    if not isinstance(value, str):
-        return False
-    return value.count("\n") >= _MIN_STRING_NEWLINES or len(value) >= _MIN_STRING_LENGTH
+    match value:
+        case str():
+            return (
+                value.count("\n") >= _MIN_STRING_NEWLINES
+                or len(value) >= _MIN_STRING_LENGTH
+            )
+        case _:
+            return False
 
 
 def _is_snapshot_worthy(operand: nodes.NodeNG) -> bool:
@@ -123,8 +128,11 @@ def _in_test_function(node: nodes.NodeNG) -> bool:
     --------
     An assert in ``test_render`` qualifies; one in a helper does not.
     """
-    frame = node.frame()
-    return isinstance(frame, nodes.FunctionDef) and frame.name.startswith("test_")
+    match node.frame():
+        case nodes.FunctionDef(name=name):
+            return name.startswith("test_")
+        case _:
+            return False
 
 
 def _substring_probe_target(statement: nodes.Assert) -> str | None:
@@ -170,6 +178,14 @@ def _direct_substring_probes(
 
 class SnapshotAssertionChecker(checkers.BaseChecker):
     """Report assertions in tests that should be syrupy snapshots.
+
+    Attributes
+    ----------
+    name : str
+        The checker identifier, ``df12-snapshot-asserts``.
+    msgs : dict[str, MessageDefinitionTuple]
+        The R9108 ``prefer-snapshot-assertion`` and R9109
+        ``prefer-snapshot-substring`` messages.
 
     Examples
     --------
