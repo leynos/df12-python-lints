@@ -123,7 +123,7 @@ import os.path
 join = os.path.join  # flagged
 ```
 
-Use `from os.path import join` (or `import module as alias`) instead, so
+Use `from os.path import join` instead, so
 importers and type checkers see a real import binding. Call results, aliases of
 names defined in the same module, and assignments inside functions are not
 flagged.

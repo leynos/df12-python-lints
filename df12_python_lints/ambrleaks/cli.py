@@ -64,6 +64,18 @@ def discover(paths: cabc.Iterable[pathlib.Path]) -> cabc.Iterator[pathlib.Path]:
     imposed); a file argument yields itself. Paths are produced one at a
     time so a whole tree is never held in a single list.
 
+    Parameters
+    ----------
+    paths : collections.abc.Iterable[pathlib.Path]
+        Files and directories to scan. A directory is walked recursively
+        for ``.ambr`` files; a file is treated as a direct target.
+
+    Yields
+    ------
+    pathlib.Path
+        Each ``.ambr`` file found beneath a directory argument, and each
+        file argument unchanged.
+
     Examples
     --------
     A directory argument yields every ``.ambr`` file beneath it; a file
@@ -139,15 +151,7 @@ def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
 def _collect_findings(
     arguments: argparse.Namespace, config: Config, base_dir: pathlib.Path
 ) -> cabc.Iterator[Finding]:
-    """Yield allowlisted-out findings, streaming one file at a time.
-
-    Each discovered file is scanned and its findings are filtered against
-    the configuration allowlist inline, so a file's findings surface
-    before the next file is read and the whole finding set is never held
-    in memory at once. *base_dir* is the CLI's resolved base directory,
-    injected into every :func:`scan_file` call so scanning never derives
-    paths from the ambient working directory.
-    """
+    """Yield findings not suppressed by the allowlist, one scanned file at a time."""
     rules = select_rules(config)
     for path in discover(arguments.paths):
         for finding in scan_file(path, rules, base_dir=base_dir):
