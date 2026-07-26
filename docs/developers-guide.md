@@ -2,6 +2,94 @@
 
 This guide explains the contributor workflow for the generated project.
 
+## Plugin architecture
+
+Pylint discovers the plugin through `register()` in
+`df12_python_lints/__init__.py`, the entry point pylint calls when
+`load-plugins` names the package. It instantiates and registers the nine
+checkers, each defined in its own module: `MatchDispatchChecker`,
+`AssertMessageChecker`, `ConstantChainChecker`, `TrivialWrapperChecker`,
+`ReexportAssignmentChecker`, `SuppressionCommentChecker`,
+`SnapshotAssertionChecker`, `TypeAliasChecker`, and `FutureAnnotationsChecker`.
+Between them they expose twelve messages. The last two are gated on pylint's
+`py-version` option: the type-alias check needs a 3.12+ baseline (PEP 695) and
+the future-annotations check a 3.14+ baseline (PEP 749 deferred evaluation), so
+the end-to-end shim tests pass `--py-version=3.14` explicitly — the shim runs
+under PyPy, whose interpreter version would otherwise gate both checks off.
+
+Logic shared by more than one checker lives in two private helper modules:
+
+- `_chains.py` holds the traversal used by the dispatch-oriented checkers to
+  walk a head `if` statement and its `elif` chain. Its pure selection kernels
+  (`repeated_subject`, `narrowing_prefix`) carry PEP 316 `pre:`/`post:`
+  contracts so CrossHair can model-check them symbolically, separate from the
+  astroid-bound checker classes that consume them.
+- `_expressions.py` holds the attribute-chain and name-binding helpers — for
+  example resolving the base `Name` of a pure `name.attr.deeper` chain — used
+  by the wrapper and re-export checkers.
+
+`SuppressionCommentChecker` is token-based rather than AST-based: it inspects
+comment tokens to find suppression pragmas and the explanations that may
+accompany them, because a bare pragma carries no node in the abstract syntax
+tree to attach a check to.
+
+The `ambrleaks` subpackage is a separate, standalone scanner exposed as its own
+console script, split into four modules: `rules.py` pairs each detection
+pattern with an optional entropy floor and allowlists, `scanner.py` walks
+`.ambr` files line by line and attributes findings to their `# name:` test
+block, `config.py` holds the `Config` model and its parser, and `cli.py`
+provides the command-line entry point. Each module keeps a pure core behind a
+thin filesystem boundary, so the reusable logic reads no files and never
+consults the working directory: `scanner.py` pairs the pure `scan_text` with the
+`scan_file` boundary, `config.py` pairs the pure `parse_config` with the
+`read_config` boundary, and `cli.py` pairs `apply_baseline` with
+`read_baseline`. Both scanner entry points take an explicit `base_dir`; the CLI
+resolves it from the working directory once, at its own boundary, and injects
+it into scanning, so path canonicalization stays deterministic. Suppression
+lives in external configuration and baseline files rather than inline markers
+because syrupy rewrites `.ambr` files wholesale on `--snapshot-update` and
+would destroy any annotation.
+
+### Observability
+
+`ambrleaks` emits standard-library structured logs at its operational
+boundaries — configuration load, scan (with a finding count), baseline
+suppression (with a hit count), and scan failure — through the `ambrleaks`
+logger. It follows the library convention of attaching a `NullHandler`, so the
+logs are silent by default and never pollute the finding output; `-v` /
+`--verbose` attaches a stderr handler at `INFO`, and an embedding process can
+configure the `ambrleaks` logger to route the records anywhere. This keeps the
+default run's user-facing contract unchanged: an exit status (`0` clean, `1`
+findings remain, `2` a configuration, I/O, or decode error), one line per
+finding on stdout (each tagged with its rule id), a finding-count summary and
+any `ambrleaks: error:` message on stderr.
+
+The tool deliberately stops there — no metrics backend, tracing, or alerting.
+It is a synchronous, single-shot lint-style CLI (the class of `ruff`, `pylint`,
+or `grep`) with no long-running process, network calls, or shared mutable state
+to instrument; the boundary logs carry the bounded counts (findings, baseline
+hits, failures) that a metrics layer would otherwise expose, and the invoking
+shell or CI job captures the status and output. If `ambrleaks` ever grows a
+long-running or service mode, revisit whether a metrics or tracing stack is
+then warranted.
+
+### Performance
+
+The scan streams end to end and holds no whole-result collection in memory.
+`discover` yields `.ambr` paths straight from the recursive walk (no sort, so
+they arrive in filesystem order), and `_collect_findings` scans one file at a
+time and applies the allowlist inline, so a file's findings surface before the
+next file is read. Every mode consumes that stream incrementally:
+`--write-baseline` (`write_baseline`) appends one JSON fingerprint entry per
+finding as it arrives — building the array in a same-directory temporary file
+that is atomically moved into place — and `--baseline` streams the findings
+through `apply_baseline`, a generator that consumes one baselined occurrence
+per matching fingerprint and yields the survivors immediately. Scanned and
+suppressed counts are tallied incrementally for logging, never by materializing
+or re-scanning. Baseline entries therefore follow discovery order rather than a
+sorted order; occurrence semantics (a fingerprint recorded *n* times suppresses
+the first *n* matches) are unchanged.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and
@@ -76,3 +164,30 @@ the estate-wide base from `leynos/agent-helper-scripts` only when its authority
 is newer than the ignored local cache. A populated cache supports offline
 generation. Add only project-specific terms and exclusions to
 `typos.local.toml`; never edit generated `typos.toml` by hand.
+
+## Verification tiers
+
+The test suite is layered, so each verification tier runs at the right cadence:
+
+- **Example tests** (`make test`) run the pytest suites, including the
+  Hypothesis property tests in `tests/test_properties.py`. The properties cover
+  the checkers' decision kernels across whole input families — chain lengths,
+  guard-run lengths, literal nesting, and generated pragma comments — and any
+  shrunk counterexample should be promoted to a named regression test beside
+  the checker's example suite.
+- **Symbolic model checks** (`make crosshair`) run CrossHair over the
+  pure selection kernels in `df12_python_lints/_chains.py`, which carry PEP 316
+  contracts (`pre:`/`post:` docstring clauses). The `pre:` clauses deliberately
+  bound the symbolic domain — short chains drawn from a two-symbol alphabet —
+  so the search can *confirm* every `post:` clause over all paths rather than
+  merely exhaust its budget. `tests/test_crosshair.py` requires those four
+  confirmations (one in `repeated_subject`, three in `narrowing_prefix`) and
+  treats a "Not confirmed" verdict as a failure; the bounds scope the proof
+  only, while the Hypothesis tier covers the unbounded runtime domain. The gate
+  is opt-in; run it on changes to the kernels rather than on every push.
+- **End-to-end shim tests** (part of `make test`,
+  `tests/test_e2e_shim.py`) lint fixture modules through the pinned
+  `leynos/pylint-pypy-shim` runner with the plugin loaded, proving every
+  checker fires — and stays silent on clean code — under the same PyPy-backed
+  pylint that the project's own lint gate uses. The shim ref is read from the
+  Makefile so the two cannot drift apart.

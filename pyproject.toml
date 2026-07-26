@@ -5,7 +5,10 @@ description = "df12-python-lints package"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "ISC" }
-dependencies = []
+dependencies = ["pylint>=3.3"]
+
+[project.scripts]
+ambrleaks = "df12_python_lints.ambrleaks.cli:main"
 
 [dependency-groups]
 dev = [
@@ -17,6 +20,8 @@ dev = [
     "ty",
     "pytest-timeout",
     "pytest-xdist",
+    "hypothesis>=6",
+    "crosshair-tool",
 ]
 
 [tool.ruff]
@@ -293,6 +298,10 @@ enable = [
     "too-many-public-methods",
     "too-many-statements",
 ]
+
+[tool.crosshair]
+per_path_timeout = 4
+per_condition_timeout = 30
 
 [tool.pytest.ini_options]
 # Tests automatically killed after seconds elapsed
