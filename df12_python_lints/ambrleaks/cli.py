@@ -28,6 +28,7 @@ import logging
 import pathlib
 import re
 import sys
+import tempfile
 import tomllib
 import typing as typ
 
@@ -58,10 +59,10 @@ def _is_allowed(finding: Finding, config: Config) -> bool:
 def discover(paths: cabc.Iterable[pathlib.Path]) -> cabc.Iterator[pathlib.Path]:
     """Yield the ``.ambr`` files under each of *paths*, lazily.
 
-    Directory arguments stream their ``.ambr`` files in sorted order (the
-    per-directory listing is sorted for deterministic reporting); a file
-    argument yields itself. Paths are produced one at a time so a whole
-    tree is never held in a single list.
+    Directory arguments stream their ``.ambr`` files straight from the
+    recursive walk, in the order the filesystem returns them (no order is
+    imposed); a file argument yields itself. Paths are produced one at a
+    time so a whole tree is never held in a single list.
 
     Examples
     --------
@@ -70,7 +71,7 @@ def discover(paths: cabc.Iterable[pathlib.Path]) -> cabc.Iterator[pathlib.Path]:
     """
     for path in paths:
         if path.is_dir():
-            yield from sorted(path.rglob("*.ambr"))
+            yield from path.rglob("*.ambr")
         else:
             yield path
 
@@ -155,30 +156,31 @@ def _collect_findings(
 
 
 def apply_baseline(
-    findings: list[Finding], accepted: cabc.Mapping[str, int]
-) -> list[Finding]:
-    """Drop findings the baseline accepts, one per recorded occurrence.
+    findings: cabc.Iterable[Finding], accepted: cabc.Mapping[str, int]
+) -> cabc.Iterator[Finding]:
+    """Yield findings the baseline does not grandfather, lazily.
 
-    Pure counterpart to :func:`read_baseline`: *accepted* maps a
-    finding fingerprint to the number of occurrences the baseline
-    grandfathers. Each matching finding consumes one occurrence, so a
-    fingerprint recorded *n* times suppresses only the first *n*
-    findings and any beyond that still surface.
+    Pure counterpart to :func:`read_baseline`: *accepted* maps a finding
+    fingerprint to the number of occurrences the baseline grandfathers.
+    It is copied into a local counter, so the caller's mapping is left
+    unmodified. Each matching finding consumes one occurrence and is
+    dropped; a fingerprint recorded *n* times suppresses only the first
+    *n* findings, and any beyond that are yielded. Findings stream
+    through — a survivor is yielded as soon as it arrives, before the
+    rest of *findings* is read.
 
     Examples
     --------
     With ``accepted`` counting a fingerprint once, the first finding
-    sharing it is dropped and a second identical finding is kept.
+    sharing it is dropped and a second identical finding is yielded.
     """
     remaining_quota = collections.Counter(accepted)
-    remaining: list[Finding] = []
     for finding in findings:
         fingerprint = finding.fingerprint()
         if remaining_quota[fingerprint] > 0:
             remaining_quota[fingerprint] -= 1
         else:
-            remaining.append(finding)
-    return remaining
+            yield finding
 
 
 def read_baseline(path: pathlib.Path) -> collections.Counter[str]:
@@ -190,6 +192,43 @@ def read_baseline(path: pathlib.Path) -> collections.Counter[str]:
     CLI reports them at its boundary.
     """
     return collections.Counter(json.loads(path.read_text(encoding="utf-8")))
+
+
+def write_baseline(path: pathlib.Path, findings: cabc.Iterable[Finding]) -> int:
+    """Write *findings*' fingerprints to *path* as a JSON array, streaming.
+
+    Filesystem boundary for baseline writing: each finding's fingerprint
+    is JSON-encoded and appended as it arrives, so the whole fingerprint
+    set is never held in memory, and one entry is written per finding
+    occurrence. The array is built in a same-directory temporary file and
+    atomically moved into place, so a write failure never leaves a
+    partially written baseline; the error propagates to the caller, which
+    reports it at the CLI boundary.
+
+    Returns
+    -------
+    int
+        The number of fingerprints written.
+    """
+    written = 0
+    tmp_path: pathlib.Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, delete=False
+        ) as handle:
+            tmp_path = pathlib.Path(handle.name)
+            handle.write("[")
+            for finding in findings:
+                separator = "," if written else ""
+                handle.write(separator + json.dumps(finding.fingerprint()))
+                written += 1
+            handle.write("]\n")
+        tmp_path.replace(path)
+    except BaseException:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        raise
+    return written
 
 
 _MIN_MASK_PREVIEW_LENGTH: typ.Final = 4
@@ -225,6 +264,20 @@ def _enable_verbose_logging() -> None:
     logger.setLevel(logging.INFO)
 
 
+def _count_stream(
+    findings: cabc.Iterable[Finding], total: list[int]
+) -> cabc.Iterator[Finding]:
+    """Yield *findings* unchanged, adding each to ``total[0]`` as it passes.
+
+    Lets the caller count a streamed scan incrementally — without a second
+    pass or materialising the findings — by reading ``total[0]`` once the
+    downstream consumer has drained the stream.
+    """
+    for finding in findings:
+        total[0] += 1
+        yield finding
+
+
 def _print_findings(findings: cabc.Iterable[Finding], *, show_values: bool) -> int:
     """Print each finding as it arrives and return how many were printed.
 
@@ -258,27 +311,20 @@ def _run(arguments: argparse.Namespace) -> int:
     base_dir = pathlib.Path.cwd()
     findings = _collect_findings(arguments, config, base_dir)
     if arguments.write_baseline is not None:
-        # Sorting materializes the fingerprints, but the baseline is a
-        # small, deterministic artefact (one entry per finding, ordered for
-        # a stable diff) and the finding set is bounded by the project's
-        # snapshot files.
-        fingerprints = sorted(f.fingerprint() for f in findings)
-        arguments.write_baseline.write_text(
-            json.dumps(fingerprints, indent=2) + "\n", encoding="utf-8"
-        )
-        logger.info("wrote baseline of %d fingerprint(s)", len(fingerprints))
-        print(f"ambrleaks: baselined {len(fingerprints)} finding(s)")
+        written = write_baseline(arguments.write_baseline, findings)
+        logger.info("wrote baseline of %d fingerprint(s)", written)
+        print(f"ambrleaks: baselined {written} finding(s)")
         return 0
     if arguments.baseline is not None:
-        # Baselining matches findings against recorded fingerprints, so the
-        # (bounded) finding set is materialized here to count occurrences.
-        collected = list(findings)
-        remaining = apply_baseline(collected, read_baseline(arguments.baseline))
-        logger.info("scan produced %d finding(s) under %s", len(collected), base_dir)
-        logger.info(
-            "baseline suppressed %d finding(s)", len(collected) - len(remaining)
-        )
-        reported = _print_findings(remaining, show_values=arguments.show_values)
+        # Stream findings through baseline suppression, counting how many
+        # were scanned as they pass so the suppressed total needs no second
+        # pass or materialised list.
+        scanned = [0]
+        accepted = read_baseline(arguments.baseline)
+        survivors = apply_baseline(_count_stream(findings, scanned), accepted)
+        reported = _print_findings(survivors, show_values=arguments.show_values)
+        logger.info("scan produced %d finding(s) under %s", scanned[0], base_dir)
+        logger.info("baseline suppressed %d finding(s)", scanned[0] - reported)
     else:
         reported = _print_findings(findings, show_values=arguments.show_values)
         logger.info("scan produced %d finding(s) under %s", reported, base_dir)

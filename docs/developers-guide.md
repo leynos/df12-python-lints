@@ -75,16 +75,20 @@ then warranted.
 
 ### Performance
 
-The scan streams end to end: `discover` yields `.ambr` paths lazily, and
-`_collect_findings` scans one file at a time and applies the allowlist inline,
-so a file's findings surface before the next file is read and the full finding
-set is never held in memory. The output loop consumes that stream and prints as
-it goes. Two paths intentionally materialize a bounded set — `--write-baseline`
-sorts the fingerprints into a deterministic, diff-friendly artefact, and
-`--baseline` collects the findings to count occurrences against the recorded
-fingerprints — but the input is bounded by a project's snapshot files (a fixed
-fixture set scanned once per run), so this is a deliberate, bounded cost rather
-than an unbounded accumulation.
+The scan streams end to end and holds no whole-result collection in memory.
+`discover` yields `.ambr` paths straight from the recursive walk (no sort, so
+they arrive in filesystem order), and `_collect_findings` scans one file at a
+time and applies the allowlist inline, so a file's findings surface before the
+next file is read. Every mode consumes that stream incrementally:
+`--write-baseline` (`write_baseline`) appends one JSON fingerprint entry per
+finding as it arrives — building the array in a same-directory temporary file
+that is atomically moved into place — and `--baseline` streams the findings
+through `apply_baseline`, a generator that consumes one baselined occurrence
+per matching fingerprint and yields the survivors immediately. Scanned and
+suppressed counts are tallied incrementally for logging, never by materializing
+or re-scanning. Baseline entries therefore follow discovery order rather than a
+sorted order; occurrence semantics (a fingerprint recorded *n* times suppresses
+the first *n* matches) are unchanged.
 
 ## Local workflow
 

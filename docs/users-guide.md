@@ -268,6 +268,8 @@ therefore lives outside the snapshot and survives regeneration:
 
   Fingerprints hash the file path, test name, rule, and value — not the line
   number — so a baseline survives blocks moving when snapshots are regenerated.
+  Baselines are written as findings are scanned (one entry per occurrence), so
+  entries follow scan order rather than a sorted order.
 
 The lasting fix is redaction at record time with syrupy's
 `matcher=path_type(...)` (including its regex `replacer` idiom for values

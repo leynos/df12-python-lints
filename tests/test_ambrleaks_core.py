@@ -11,6 +11,7 @@ and the CLI's error boundary is exercised in ``test_ambrleaks_cli``.
 from __future__ import annotations
 
 import collections
+import json
 import pathlib
 import re
 import tomllib
@@ -19,7 +20,11 @@ import typing as typ
 import pytest
 
 from df12_python_lints.ambrleaks import DEFAULT_RULES, Finding, scan_file, scan_text
-from df12_python_lints.ambrleaks.cli import _masked_value, apply_baseline
+from df12_python_lints.ambrleaks.cli import (
+    _masked_value,
+    apply_baseline,
+    write_baseline,
+)
 from df12_python_lints.ambrleaks.config import (
     ConfigError,
     default_config,
@@ -179,7 +184,7 @@ class TestReadConfig:
 
 
 class TestApplyBaseline:
-    """Exercise the pure baseline-suppression core."""
+    """Exercise the streaming baseline-suppression core."""
 
     @staticmethod
     def _finding() -> Finding:
@@ -190,7 +195,7 @@ class TestApplyBaseline:
         """A fingerprint recorded once suppresses exactly one finding."""
         finding = self._finding()
         accepted = {finding.fingerprint(): 1}
-        remaining = apply_baseline([finding, finding], accepted)
+        remaining = list(apply_baseline([finding, finding], accepted))
         assert remaining == [finding], (
             "only the surplus occurrence must survive the baseline"
         )
@@ -198,17 +203,77 @@ class TestApplyBaseline:
     def test_unlisted_findings_are_kept(self) -> None:
         """Findings absent from the baseline are never dropped."""
         finding = self._finding()
-        assert apply_baseline([finding], {}) == [finding], (
+        assert list(apply_baseline([finding], {})) == [finding], (
             "an empty baseline must keep every finding"
         )
 
     def test_does_not_mutate_the_supplied_mapping(self) -> None:
-        """The pure core leaves its accepted-count mapping untouched."""
+        """The core leaves its accepted-count mapping untouched."""
         finding = self._finding()
         accepted = collections.Counter({finding.fingerprint(): 2})
-        apply_baseline([finding], accepted)
+        list(apply_baseline([finding], accepted))
         assert accepted[finding.fingerprint()] == 2, (
             "apply_baseline must not consume the caller's counts"
+        )
+
+    def test_yields_surplus_before_consuming_the_rest(self) -> None:
+        """A surplus finding is yielded before later input is read."""
+        surplus = self._finding()
+        sentinel = Finding("q", 9, "test_late", "snapshot-hex", "deadbeef")
+        consumed: list[Finding] = []
+
+        def _source() -> cabc.Iterator[Finding]:
+            """Record each finding into ``consumed`` as it is pulled."""
+            consumed.append(surplus)
+            yield surplus
+            consumed.append(sentinel)
+            yield sentinel
+
+        # An empty baseline grandfathers nothing, so every finding survives.
+        survivors = apply_baseline(_source(), {})
+        first = next(survivors)
+        assert first is surplus, "the first survivor must arrive first"
+        assert consumed == [surplus], (
+            "suppression must yield the first survivor before reading the rest"
+        )
+
+
+class TestWriteBaseline:
+    """Exercise the streaming baseline writer."""
+
+    @staticmethod
+    def _finding() -> Finding:
+        """Return a representative finding for baseline assertions."""
+        return Finding("p", 1, "test_user", "snapshot-email", "alice@realcorp.io")
+
+    def test_writes_one_entry_per_occurrence_from_an_iterator(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A single-use iterator is consumed into a valid JSON array."""
+        finding = self._finding()
+
+        def _source() -> cabc.Iterator[Finding]:
+            """Yield the same finding twice as a single-use iterator."""
+            yield finding
+            yield finding
+
+        out = tmp_path / "baseline.json"
+        written = write_baseline(out, _source())
+        assert written == 2, "each occurrence must produce one entry"
+        recorded = json.loads(out.read_text(encoding="utf-8"))
+        assert recorded == [finding.fingerprint(), finding.fingerprint()], (
+            "the baseline must be a JSON array with one entry per occurrence"
+        )
+
+    def test_empty_stream_writes_an_empty_json_array(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An empty scan writes a valid empty JSON array."""
+        out = tmp_path / "baseline.json"
+        written = write_baseline(out, iter(()))
+        assert written == 0, "an empty scan writes nothing"
+        assert json.loads(out.read_text(encoding="utf-8")) == [], (
+            "an empty baseline must be a valid empty JSON array"
         )
 
 

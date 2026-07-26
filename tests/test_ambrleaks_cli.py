@@ -131,6 +131,27 @@ class TestDiscoveryAndPaths:
             "streaming collection must still yield the seeded finding"
         )
 
+    def test_discover_yields_before_walking_the_whole_tree(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Yield the first path without exhausting or sorting the whole walk."""
+        pulled: list[pathlib.Path] = []
+
+        def _fake_rglob(_self: object, _pattern: str) -> cabc.Iterator[pathlib.Path]:
+            """Yield many paths lazily, recording each pulled into ``pulled``."""
+            for index in range(1000):
+                candidate = tmp_path / f"snapshot{index}.ambr"
+                pulled.append(candidate)
+                yield candidate
+
+        monkeypatch.setattr("pathlib.Path.rglob", _fake_rglob)
+        first = next(discover([tmp_path]))
+        assert first == tmp_path / "snapshot0.ambr", "the first path must arrive first"
+        assert len(pulled) == 1, (
+            "discover must yield the first path before walking the rest "
+            "(a sort would exhaust the whole traversal first)"
+        )
+
     def test_default_config_discovered_from_cwd(
         self,
         tmp_path: pathlib.Path,
