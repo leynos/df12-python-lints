@@ -73,6 +73,19 @@ shell or CI job captures the status and output. If `ambrleaks` ever grows a
 long-running or service mode, revisit whether a metrics or tracing stack is
 then warranted.
 
+### Performance
+
+The scan streams end to end: `discover` yields `.ambr` paths lazily, and
+`_collect_findings` scans one file at a time and applies the allowlist inline,
+so a file's findings surface before the next file is read and the full finding
+set is never held in memory. The output loop consumes that stream and prints as
+it goes. Two paths intentionally materialize a bounded set — `--write-baseline`
+sorts the fingerprints into a deterministic, diff-friendly artefact, and
+`--baseline` collects the findings to count occurrences against the recorded
+fingerprints — but the input is bounded by a project's snapshot files (a fixed
+fixture set scanned once per run), so this is a deliberate, bounded cost rather
+than an unbounded accumulation.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and

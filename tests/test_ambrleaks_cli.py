@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import argparse
+import collections.abc as cabc
 import logging
 import typing as typ
 
 import pytest
 
 from df12_python_lints.ambrleaks import DEFAULT_RULES, main, scan_file, shannon_entropy
-from df12_python_lints.ambrleaks.cli import logger
+from df12_python_lints.ambrleaks.cli import _collect_findings, discover, logger
+from df12_python_lints.ambrleaks.config import default_config
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import pathlib
 
 _SNAPSHOT = """\
@@ -105,6 +107,29 @@ class TestDiscoveryAndPaths:
         """A direct .ambr file argument is scanned without discovery."""
         path = write_snapshot(tmp_path, _SNAPSHOT)
         assert main([str(path)]) == 1, "a directly named file must be scanned"
+
+    def test_discovery_and_collection_stream_lazily(
+        self,
+        tmp_path: pathlib.Path,
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """Stream path discovery and finding collection as lazy iterators."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        paths = discover([tmp_path])
+        assert isinstance(paths, cabc.Iterator), "discover must be lazy"
+        assert not isinstance(paths, list), "discover must not build a list"
+        assert any(p.name == "test_demo.ambr" for p in paths), (
+            "discovery must still find the snapshot file"
+        )
+        arguments = argparse.Namespace(paths=[tmp_path])
+        findings = _collect_findings(arguments, default_config(), tmp_path)
+        assert isinstance(findings, cabc.Iterator), (
+            "_collect_findings must stream findings, not return a list"
+        )
+        reported = {(finding.rule_id, finding.value) for finding in findings}
+        assert ("snapshot-email", "alice@realcorp.io") in reported, (
+            "streaming collection must still yield the seeded finding"
+        )
 
     def test_default_config_discovered_from_cwd(
         self,

@@ -55,21 +55,24 @@ def _is_allowed(finding: Finding, config: Config) -> bool:
     )
 
 
-def discover(paths: cabc.Iterable[pathlib.Path]) -> list[pathlib.Path]:
-    """Collect ``.ambr`` files under each of *paths*.
+def discover(paths: cabc.Iterable[pathlib.Path]) -> cabc.Iterator[pathlib.Path]:
+    """Yield the ``.ambr`` files under each of *paths*, lazily.
+
+    Directory arguments stream their ``.ambr`` files in sorted order (the
+    per-directory listing is sorted for deterministic reporting); a file
+    argument yields itself. Paths are produced one at a time so a whole
+    tree is never held in a single list.
 
     Examples
     --------
     A directory argument yields every ``.ambr`` file beneath it; a file
     argument yields itself.
     """
-    collected: list[pathlib.Path] = []
     for path in paths:
         if path.is_dir():
-            collected.extend(sorted(path.rglob("*.ambr")))
+            yield from sorted(path.rglob("*.ambr"))
         else:
-            collected.append(path)
-    return collected
+            yield path
 
 
 def _default_config_path() -> pathlib.Path | None:
@@ -134,20 +137,21 @@ def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
 
 def _collect_findings(
     arguments: argparse.Namespace, config: Config, base_dir: pathlib.Path
-) -> list[Finding]:
-    """Scan the requested paths and apply configuration allowlists.
+) -> cabc.Iterator[Finding]:
+    """Yield allowlisted-out findings, streaming one file at a time.
 
-    *base_dir* is the CLI's resolved base directory; it is injected into
-    every :func:`scan_file` call so scanning never derives paths from the
-    ambient working directory.
+    Each discovered file is scanned and its findings are filtered against
+    the configuration allowlist inline, so a file's findings surface
+    before the next file is read and the whole finding set is never held
+    in memory at once. *base_dir* is the CLI's resolved base directory,
+    injected into every :func:`scan_file` call so scanning never derives
+    paths from the ambient working directory.
     """
     rules = select_rules(config)
-    findings = [
-        finding
-        for path in discover(arguments.paths)
-        for finding in scan_file(path, rules, base_dir=base_dir)
-    ]
-    return [f for f in findings if not _is_allowed(f, config)]
+    for path in discover(arguments.paths):
+        for finding in scan_file(path, rules, base_dir=base_dir):
+            if not _is_allowed(finding, config):
+                yield finding
 
 
 def apply_baseline(
@@ -221,6 +225,24 @@ def _enable_verbose_logging() -> None:
     logger.setLevel(logging.INFO)
 
 
+def _print_findings(findings: cabc.Iterable[Finding], *, show_values: bool) -> int:
+    """Print each finding as it arrives and return how many were printed.
+
+    Consuming *findings* lazily keeps the streaming scan end-to-end: a
+    finding is printed as its file is scanned rather than after the whole
+    set is collected. The value is masked unless *show_values* is set.
+    """
+    reported = 0
+    for finding in findings:
+        reported += 1
+        value = finding.value if show_values else _masked_value(finding.value)
+        print(
+            f"{finding.path}:{finding.line}: [{finding.rule_id}] "
+            f"{finding.test_name}: {value}"
+        )
+    return reported
+
+
 def _run(arguments: argparse.Namespace) -> int:
     """Execute the scan described by *arguments* and return an exit code.
 
@@ -235,8 +257,11 @@ def _run(arguments: argparse.Namespace) -> int:
     logger.info("loaded configuration from %s", config_path or "defaults")
     base_dir = pathlib.Path.cwd()
     findings = _collect_findings(arguments, config, base_dir)
-    logger.info("scan produced %d finding(s) under %s", len(findings), base_dir)
     if arguments.write_baseline is not None:
+        # Sorting materializes the fingerprints, but the baseline is a
+        # small, deterministic artefact (one entry per finding, ordered for
+        # a stable diff) and the finding set is bounded by the project's
+        # snapshot files.
         fingerprints = sorted(f.fingerprint() for f in findings)
         arguments.write_baseline.write_text(
             json.dumps(fingerprints, indent=2) + "\n", encoding="utf-8"
@@ -245,17 +270,20 @@ def _run(arguments: argparse.Namespace) -> int:
         print(f"ambrleaks: baselined {len(fingerprints)} finding(s)")
         return 0
     if arguments.baseline is not None:
-        before = len(findings)
-        findings = apply_baseline(findings, read_baseline(arguments.baseline))
-        logger.info("baseline suppressed %d finding(s)", before - len(findings))
-    for finding in findings:
-        value = finding.value if arguments.show_values else _masked_value(finding.value)
-        print(
-            f"{finding.path}:{finding.line}: [{finding.rule_id}] "
-            f"{finding.test_name}: {value}"
+        # Baselining matches findings against recorded fingerprints, so the
+        # (bounded) finding set is materialized here to count occurrences.
+        collected = list(findings)
+        remaining = apply_baseline(collected, read_baseline(arguments.baseline))
+        logger.info("scan produced %d finding(s) under %s", len(collected), base_dir)
+        logger.info(
+            "baseline suppressed %d finding(s)", len(collected) - len(remaining)
         )
-    if findings:
-        print(f"ambrleaks: {len(findings)} finding(s)", file=sys.stderr)
+        reported = _print_findings(remaining, show_values=arguments.show_values)
+    else:
+        reported = _print_findings(findings, show_values=arguments.show_values)
+        logger.info("scan produced %d finding(s) under %s", reported, base_dir)
+    if reported:
+        print(f"ambrleaks: {reported} finding(s)", file=sys.stderr)
         return 1
     return 0
 
