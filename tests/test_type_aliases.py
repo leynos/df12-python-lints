@@ -11,6 +11,8 @@ from pylint.testutils import set_config
 from df12_python_lints.type_aliases import (
     TypeAliasChecker,
     _assignment_import_origin,
+    _from_import_binding_origin,
+    _import_binding_origin,
 )
 
 
@@ -22,6 +24,16 @@ def _extract_assign(code: str) -> astroid.nodes.Assign:
 def _extract_statement(code: str) -> astroid.nodes.NodeNG:
     """Extract the ``#@``-marked statement from *code*."""
     return typ.cast("astroid.nodes.NodeNG", astroid.extract_node(code))
+
+
+def _extract_import(code: str) -> astroid.nodes.Import:
+    """Extract the ``#@``-marked ``import`` statement from *code*."""
+    return typ.cast("astroid.nodes.Import", astroid.extract_node(code))
+
+
+def _extract_import_from(code: str) -> astroid.nodes.ImportFrom:
+    """Extract the ``#@``-marked ``from`` import statement from *code*."""
+    return typ.cast("astroid.nodes.ImportFrom", astroid.extract_node(code))
 
 
 def _extract_annassign(code: str) -> astroid.nodes.AnnAssign:
@@ -249,3 +261,43 @@ class TestAssignmentImportOrigin:
         """A binding that is not an import yields None."""
         node = _extract_statement("x = 1  #@")
         assert _assignment_import_origin(node, "x") is None
+
+
+class TestImportBindingOrigin:
+    """Exercise the ``import`` binding decoder directly."""
+
+    def test_aliased_import_resolves_full_path(self) -> None:
+        """An aliased import resolves to the full module path."""
+        node = _extract_import("import collections.abc as cabc  #@")
+        assert _import_binding_origin(node.names, "cabc") == "collections.abc"
+
+    def test_unaliased_dotted_import_binds_top_level(self) -> None:
+        """An unaliased dotted import binds and resolves its top-level name."""
+        node = _extract_import("import collections.abc  #@")
+        assert _import_binding_origin(node.names, "collections") == "collections"
+
+    def test_non_matching_name_is_none(self) -> None:
+        """A name matching no import entry yields None."""
+        node = _extract_import("import os  #@")
+        assert _import_binding_origin(node.names, "sys") is None
+
+
+class TestFromImportBindingOrigin:
+    """Exercise the ``from`` import binding decoder directly."""
+
+    def test_aliased_from_import_resolves_original(self) -> None:
+        """A from-import alias resolves to its module-qualified original."""
+        node = _extract_import_from("from typing import Callable as C  #@")
+        origin = _from_import_binding_origin(node.modname, node.names, "C")
+        assert origin == "typing.Callable"
+
+    def test_unaliased_from_import_resolves_original(self) -> None:
+        """An unaliased from-import resolves to the same qualified name."""
+        node = _extract_import_from("from typing import Callable  #@")
+        origin = _from_import_binding_origin(node.modname, node.names, "Callable")
+        assert origin == "typing.Callable"
+
+    def test_non_matching_name_is_none(self) -> None:
+        """A name matching no from-import entry yields None."""
+        node = _extract_import_from("from typing import Callable  #@")
+        assert _from_import_binding_origin(node.modname, node.names, "Mapping") is None

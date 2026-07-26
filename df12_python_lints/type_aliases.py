@@ -97,17 +97,65 @@ def _dotted_parts(node: nodes.NodeNG) -> tuple[nodes.Name, list[str]] | None:
     return current, attrs
 
 
+def _import_binding_origin(
+    names: list[tuple[str, str | None]],
+    bound_name: str,
+) -> str | None:
+    """Return the origin an ``import`` statement binds to *bound_name*.
+
+    Scans one ``nodes.Import.names`` sequence. An aliased import resolves
+    to the full module path (``import collections.abc as cabc`` binds
+    ``cabc`` to ``"collections.abc"``); an unaliased dotted import binds
+    only its top-level name and resolves to it (``import collections.abc``
+    binds ``collections`` to ``"collections"``). A name matching no entry
+    yields ``None``.
+
+    Examples
+    --------
+    ``[("collections.abc", "cabc")]`` with ``bound_name="cabc"`` yields
+    ``"collections.abc"``; ``bound_name="os"`` yields ``None``.
+    """
+    for modname, alias in names:
+        if (alias or modname.partition(".")[0]) == bound_name:
+            return modname if alias else modname.partition(".")[0]
+    return None
+
+
+def _from_import_binding_origin(
+    modname: str | None,
+    names: list[tuple[str, str | None]],
+    bound_name: str,
+) -> str | None:
+    """Return the origin a ``from`` import binds to *bound_name*.
+
+    Scans one ``nodes.ImportFrom.names`` sequence and resolves a matching
+    name to its module-qualified original, aliased or not: ``from typing
+    import Callable as C`` binds ``C`` and ``from typing import Callable``
+    binds ``Callable``, both to ``"typing.Callable"``. A name matching no
+    entry yields ``None``.
+
+    Examples
+    --------
+    ``"typing"`` with ``[("Callable", "C")]`` and ``bound_name="C"``
+    yields ``"typing.Callable"``; ``bound_name="Mapping"`` yields
+    ``None``.
+    """
+    for original, alias in names:
+        if (alias or original) == bound_name:
+            return f"{modname}.{original}"
+    return None
+
+
 def _assignment_import_origin(
     assignment: nodes.NodeNG,
     bound_name: str,
 ) -> str | None:
     """Return the import origin *assignment* binds to *bound_name*.
 
-    Classifies a single binding drawn from a name's lookup chain: an
-    ``import`` or ``from`` import that binds *bound_name* yields its
-    dotted origin, and any other assignment yields ``None``. An unaliased
-    dotted ``import a.b.c`` binds only its top-level name and resolves to
-    that top-level name.
+    Classifies a single binding drawn from a name's lookup chain,
+    dispatching by import form to :func:`_import_binding_origin` or
+    :func:`_from_import_binding_origin`. Any non-import assignment yields
+    ``None``.
 
     Examples
     --------
@@ -118,13 +166,9 @@ def _assignment_import_origin(
     """
     match assignment:
         case nodes.Import(names=names):
-            for modname, alias in names:
-                if (alias or modname.partition(".")[0]) == bound_name:
-                    return modname if alias else modname.partition(".")[0]
+            return _import_binding_origin(names, bound_name)
         case nodes.ImportFrom(modname=modname, names=names):
-            for original, alias in names:
-                if (alias or original) == bound_name:
-                    return f"{modname}.{original}"
+            return _from_import_binding_origin(modname, names, bound_name)
     return None
 
 
