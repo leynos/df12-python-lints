@@ -34,6 +34,7 @@ class TestConfigErrors:
             ("allowlist = 3\n", "[allowlist] must be a table"),
             ("[allowlist]\ntests = [1]\n", "list of strings"),
             ('[allowlist]\nvalues = "x"\n', "list of strings"),
+            ("[allowlist]\npaths = [1]\n", "list of strings"),
         ],
     )
     def test_invalid_config_shapes_exit_two(

@@ -121,6 +121,13 @@ class TestParseConfig:
             "empty configuration must match the defaults"
         )
 
+    def test_ignores_unknown_allowlist_fields(self) -> None:
+        """Unrecognised ``[allowlist]`` keys are ignored, not rejected."""
+        config = parse_config('[allowlist]\nunknown = 5\ntests = ["t"]\n')
+        assert config.allow_tests == ("t",), (
+            "recognised fields must still parse alongside an ignored key"
+        )
+
     @pytest.mark.parametrize(
         ("text", "fragment"),
         [
@@ -130,6 +137,7 @@ class TestParseConfig:
             ("allowlist = 3\n", "[allowlist] must be a table"),
             ("[allowlist]\ntests = [1]\n", "list of strings"),
             ('[allowlist]\nvalues = "x"\n', "list of strings"),
+            ("[allowlist]\npaths = [1]\n", "list of strings"),
         ],
     )
     def test_invalid_shapes_raise_config_error(self, text: str, fragment: str) -> None:

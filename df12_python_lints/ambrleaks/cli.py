@@ -83,19 +83,25 @@ def _validate_rules(rules: object) -> None:
             raise ConfigError(message)
 
 
+def _validate_string_list(value: object, field: str) -> None:
+    """Ensure *value* is a list containing only strings."""
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return
+    message = f"[allowlist] {field} must be a list of strings"
+    raise ConfigError(message)
+
+
 def _validate_allowlist(allowlist: object) -> None:
-    """Ensure ``[allowlist]`` is a table of string lists."""
+    """Ensure ``[allowlist]`` is a table of recognised string lists.
+
+    Only the recognised fields (``values``, ``tests``, ``paths``) are
+    validated; any other key is ignored.
+    """
     if not isinstance(allowlist, dict):
         message = "[allowlist] must be a table"
         raise ConfigError(message)
-    for key, value in allowlist.items():
-        if key not in {"values", "tests", "paths"}:
-            continue
-        if not isinstance(value, list) or not all(
-            isinstance(item, str) for item in value
-        ):
-            message = f"[allowlist] {key} must be a list of strings"
-            raise ConfigError(message)
+    for field in ("values", "tests", "paths"):
+        _validate_string_list(allowlist.get(field, []), field)
 
 
 def parse_config(text: str) -> Config:
