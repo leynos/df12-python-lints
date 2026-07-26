@@ -92,11 +92,7 @@ def _validate_string_list(value: object, field: str) -> None:
 
 
 def _validate_allowlist(allowlist: object) -> None:
-    """Ensure ``[allowlist]`` is a table of recognised string lists.
-
-    Only the recognised fields (``values``, ``tests``, ``paths``) are
-    validated; any other key is ignored.
-    """
+    """Ensure ``[allowlist]`` is a table of recognised string lists."""
     if not isinstance(allowlist, dict):
         message = "[allowlist] must be a table"
         raise ConfigError(message)
