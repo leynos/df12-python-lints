@@ -34,36 +34,44 @@ accompany them, because a bare pragma carries no node in the abstract syntax
 tree to attach a check to.
 
 The `ambrleaks` subpackage is a separate, standalone scanner exposed as its own
-console script, split into three modules: `rules.py` pairs each detection
+console script, split into four modules: `rules.py` pairs each detection
 pattern with an optional entropy floor and allowlists, `scanner.py` walks
 `.ambr` files line by line and attributes findings to their `# name:` test
-block, and `cli.py` provides the command-line entry point. Each module keeps a
-pure core behind a thin filesystem boundary so the reusable logic reads no
-files and never consults the working directory: `scanner.py` pairs the pure
-`scan_text` with the `scan_file` boundary, and `cli.py` pairs `parse_config`
-with `read_config` and `apply_baseline` with `read_baseline`. Both scanner
-entry points take an explicit `base_dir`; the CLI resolves it from the working
-directory once, at its own boundary, and injects it into scanning, so path
-canonicalization stays deterministic. Suppression lives in external
-configuration and baseline files rather than inline markers, because syrupy
-rewrites `.ambr` files wholesale on `--snapshot-update` and would destroy any
-annotation.
+block, `config.py` holds the `Config` model and its parser, and `cli.py`
+provides the command-line entry point. Each module keeps a pure core behind a
+thin filesystem boundary so the reusable logic reads no files and never
+consults the working directory: `scanner.py` pairs the pure `scan_text` with the
+`scan_file` boundary, `config.py` pairs the pure `parse_config` with the
+`read_config` boundary, and `cli.py` pairs `apply_baseline` with
+`read_baseline`. Both scanner entry points take an explicit `base_dir`; the CLI
+resolves it from the working directory once, at its own boundary, and injects
+it into scanning, so path canonicalization stays deterministic. Suppression
+lives in external configuration and baseline files rather than inline markers,
+because syrupy rewrites `.ambr` files wholesale on `--snapshot-update` and
+would destroy any annotation.
 
 ### Observability
 
-`ambrleaks` deliberately carries no structured logging, metrics, tracing, or
-alerting. It is a synchronous, single-shot lint-style CLI — the same class of
-tool as `ruff`, `pylint`, or `grep` — with no long-running process, network
-calls, or shared mutable state to instrument. Its operational contract is the
-process result itself: an exit status (`0` clean, `1` findings remain, `2` a
-configuration, I/O, or decode error), one line per finding on stdout (each
-tagged with its rule id), a finding-count summary and any `ambrleaks: error:`
-message on stderr. The invoking shell or CI job captures that status and
-output, which is the appropriate and sufficient signal for a deterministic
-batch scanner; adding a logging or metrics stack here would add dependencies
-and noise without an operational surface to observe. If `ambrleaks` ever grows
-a long-running or service mode, revisit this decision and instrument the scan,
-configuration, and baseline boundaries then.
+`ambrleaks` emits standard-library structured logs at its operational
+boundaries — configuration load, scan (with a finding count), baseline
+suppression (with a hit count), and scan failure — through the `ambrleaks`
+logger. It follows the library convention of attaching a `NullHandler`, so the
+logs are silent by default and never pollute the finding output; `-v` /
+`--verbose` attaches a stderr handler at `INFO`, and an embedding process can
+configure the `ambrleaks` logger to route the records anywhere. This keeps the
+default run's user-facing contract unchanged: an exit status (`0` clean, `1`
+findings remain, `2` a configuration, I/O, or decode error), one line per
+finding on stdout (each tagged with its rule id), a finding-count summary and
+any `ambrleaks: error:` message on stderr.
+
+The tool deliberately stops there — no metrics backend, tracing, or alerting.
+It is a synchronous, single-shot lint-style CLI (the class of `ruff`, `pylint`,
+or `grep`) with no long-running process, network calls, or shared mutable state
+to instrument; the boundary logs carry the bounded counts (findings, baseline
+hits, failures) that a metrics layer would otherwise expose, and the invoking
+shell or CI job captures the status and output. If `ambrleaks` ever grows a
+long-running or service mode, revisit whether a metrics or tracing stack is
+then warranted.
 
 ## Local workflow
 

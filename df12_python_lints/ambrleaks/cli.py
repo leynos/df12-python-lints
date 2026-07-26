@@ -24,13 +24,14 @@ import argparse
 import collections
 import fnmatch
 import json
+import logging
 import pathlib
 import re
 import sys
 import tomllib
 import typing as typ
 
-from .rules import DEFAULT_RULES, Rule
+from .config import Config, ConfigError, read_config, select_rules
 from .scanner import Finding, scan_file
 
 if typ.TYPE_CHECKING:
@@ -38,148 +39,10 @@ if typ.TYPE_CHECKING:
 
 _CONFIG_NAMES: typ.Final = ("ambrleaks.toml", ".ambrleaks.toml")
 
-
-class ConfigError(ValueError):
-    """Raised when a configuration file is structurally invalid."""
-
-
-class Config(typ.NamedTuple):
-    """Loaded configuration for a scan run.
-
-    Examples
-    --------
-    ``default_config()`` gives the defaults: shipped rule states and
-    empty allowlists.
-    """
-
-    rule_states: tuple[tuple[str, bool], ...]
-    allow_values: tuple[str, ...]
-    allow_tests: tuple[str, ...]
-    allow_paths: tuple[str, ...]
-
-
-def default_config() -> Config:
-    """Return the configuration used when no file is present.
-
-    Examples
-    --------
-    ``default_config().allow_values`` is empty.
-    """
-    return Config(rule_states=(), allow_values=(), allow_tests=(), allow_paths=())
-
-
-def _validate_rules(rules: object) -> None:
-    """Ensure ``[rules]`` is a table of tables with boolean ``enabled``."""
-    if not isinstance(rules, dict):
-        message = "[rules] must be a table"
-        raise ConfigError(message)
-    for rule_id, entry in rules.items():
-        if not isinstance(entry, dict):
-            message = f"[rules.{rule_id}] must be a table"
-            raise ConfigError(message)
-        enabled = entry.get("enabled", True)
-        if not isinstance(enabled, bool):
-            message = f"[rules.{rule_id}] enabled must be a boolean"
-            raise ConfigError(message)
-
-
-def _validate_string_list(value: object, field: str) -> None:
-    """Ensure *value* is a list containing only strings."""
-    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return
-    message = f"[allowlist] {field} must be a list of strings"
-    raise ConfigError(message)
-
-
-def _validate_allowlist(allowlist: object) -> None:
-    """Ensure ``[allowlist]`` is a table of recognised string lists."""
-    if not isinstance(allowlist, dict):
-        message = "[allowlist] must be a table"
-        raise ConfigError(message)
-    for field in ("values", "tests", "paths"):
-        _validate_string_list(allowlist.get(field, []), field)
-
-
-def parse_config(text: str) -> Config:
-    r"""Parse *text* as an ``ambrleaks`` TOML configuration.
-
-    This is the pure configuration core: it decodes and structurally
-    validates *text* without any filesystem access, so callers can test
-    it against literal TOML. :func:`read_config` is the filesystem
-    boundary that supplies *text* from a file.
-
-    Raises
-    ------
-    ConfigError
-        If the configuration is structurally invalid.
-    tomllib.TOMLDecodeError
-        If *text* is not valid TOML.
-
-    Examples
-    --------
-    ``parse_config("[rules.snapshot-phone]\\nenabled = true\\n")``
-    switches the phone rule on.
-    """
-    data = tomllib.loads(text)
-    rules = data.get("rules", {})
-    allowlist = data.get("allowlist", {})
-    _validate_rules(rules)
-    _validate_allowlist(allowlist)
-    return Config(
-        rule_states=tuple(
-            (rule_id, bool(entry.get("enabled", True)))
-            for rule_id, entry in rules.items()
-        ),
-        allow_values=tuple(allowlist.get("values", ())),
-        allow_tests=tuple(allowlist.get("tests", ())),
-        allow_paths=tuple(allowlist.get("paths", ())),
-    )
-
-
-def read_config(path: pathlib.Path | None) -> Config:
-    """Read *path* as TOML configuration, or defaults when ``None``.
-
-    Thin filesystem boundary over :func:`parse_config`: it reads *path*
-    as UTF-8 and delegates decoding and validation. Read and decode
-    failures propagate to the caller; the CLI reports them at its
-    boundary.
-
-    Raises
-    ------
-    ConfigError
-        If the configuration is structurally invalid.
-    OSError
-        If the file cannot be read.
-    UnicodeDecodeError
-        If the file is not valid UTF-8.
-    tomllib.TOMLDecodeError
-        If the file is not valid TOML.
-
-    Examples
-    --------
-    Given an ``ambrleaks.toml`` containing ``[rules.snapshot-phone]``
-    with ``enabled = true``, ``read_config(path)`` switches the phone
-    rule on.
-    """
-    if path is None:
-        return default_config()
-    return parse_config(path.read_text(encoding="utf-8"))
-
-
-def select_rules(config: Config) -> tuple[Rule, ...]:
-    """Return the shipped rules filtered by *config* overrides.
-
-    Examples
-    --------
-    With no overrides, every rule enabled by default is returned and
-    the opt-in phone rule is not.
-    """
-    states = dict(config.rule_states)
-    return tuple(
-        rule
-        for rule in DEFAULT_RULES
-        if states.get(rule.rule_id, rule.enabled_by_default)
-    )
+# Library-style logging: quiet unless the caller (or --verbose) attaches a
+# handler, so default CLI output stays limited to findings and errors.
+logger = logging.getLogger("ambrleaks")
+logger.addHandler(logging.NullHandler())
 
 
 def _is_allowed(finding: Finding, config: Config) -> bool:
@@ -259,6 +122,12 @@ def _parse_arguments(argv: cabc.Sequence[str] | None) -> argparse.Namespace:
             "print each finding's full value; by default the value is "
             "masked so a scan report does not reproduce the secret"
         ),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="log scan, configuration, and baseline boundary details to stderr",
     )
     return parser.parse_args(argv)
 
@@ -341,25 +210,44 @@ def _masked_value(value: str) -> str:
     return f"{value[0]}{'*' * (len(value) - 2)}{value[-1]}"
 
 
+def _enable_verbose_logging() -> None:
+    """Attach a stderr handler so boundary logs surface under ``--verbose``."""
+    if any(not isinstance(h, logging.NullHandler) for h in logger.handlers):
+        logger.setLevel(logging.INFO)
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("ambrleaks: %(levelname)s: %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
 def _run(arguments: argparse.Namespace) -> int:
     """Execute the scan described by *arguments* and return an exit code.
 
     The CLI resolves its base directory once here (the working directory
     at invocation) and injects it into scanning, so the scanner core
-    never reads the ambient ``cwd`` itself.
+    never reads the ambient ``cwd`` itself. Structured logs mark the
+    configuration, scan, and baseline boundaries; they are silent unless
+    ``--verbose`` (or a caller-attached handler) surfaces them.
     """
-    config = read_config(arguments.config or _default_config_path())
+    config_path = arguments.config or _default_config_path()
+    config = read_config(config_path)
+    logger.info("loaded configuration from %s", config_path or "defaults")
     base_dir = pathlib.Path.cwd()
     findings = _collect_findings(arguments, config, base_dir)
+    logger.info("scan produced %d finding(s) under %s", len(findings), base_dir)
     if arguments.write_baseline is not None:
         fingerprints = sorted(f.fingerprint() for f in findings)
         arguments.write_baseline.write_text(
             json.dumps(fingerprints, indent=2) + "\n", encoding="utf-8"
         )
+        logger.info("wrote baseline of %d fingerprint(s)", len(fingerprints))
         print(f"ambrleaks: baselined {len(fingerprints)} finding(s)")
         return 0
     if arguments.baseline is not None:
+        before = len(findings)
         findings = apply_baseline(findings, read_baseline(arguments.baseline))
+        logger.info("baseline suppressed %d finding(s)", before - len(findings))
     for finding in findings:
         value = finding.value if arguments.show_values else _masked_value(finding.value)
         print(
@@ -381,6 +269,8 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     findings remain after allowlists and the baseline.
     """
     arguments = _parse_arguments(argv)
+    if arguments.verbose:
+        _enable_verbose_logging()
     try:
         return _run(arguments)
     except (
@@ -390,5 +280,6 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
         tomllib.TOMLDecodeError,
         json.JSONDecodeError,
     ) as err:
+        logger.exception("scan failed")
         print(f"ambrleaks: error: {err}", file=sys.stderr)
         return 2

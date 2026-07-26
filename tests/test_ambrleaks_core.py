@@ -19,10 +19,9 @@ import typing as typ
 import pytest
 
 from df12_python_lints.ambrleaks import DEFAULT_RULES, Finding, scan_file, scan_text
-from df12_python_lints.ambrleaks.cli import (
+from df12_python_lints.ambrleaks.cli import _masked_value, apply_baseline
+from df12_python_lints.ambrleaks.config import (
     ConfigError,
-    _masked_value,
-    apply_baseline,
     default_config,
     parse_config,
     read_config,

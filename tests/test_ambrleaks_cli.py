@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import typing as typ
 
 import pytest
 
 from df12_python_lints.ambrleaks import DEFAULT_RULES, main, scan_file, shannon_entropy
+from df12_python_lints.ambrleaks.cli import logger
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -210,3 +212,104 @@ class TestValueMasking:
         assert "alice@realcorp.io" in capsys.readouterr().out, (
             "--show-values must print the unredacted value"
         )
+
+
+class TestObservabilityLogging:
+    """Exercise the boundary logging and its default-quiet posture."""
+
+    @pytest.fixture(autouse=True)
+    def _restore_logger(self) -> cabc.Iterator[None]:
+        """Restore the module logger's level and handlers around each test."""
+        level, handlers = logger.level, logger.handlers[:]
+        yield
+        logger.setLevel(level)
+        logger.handlers[:] = handlers
+
+    def test_logs_configuration_and_scan_boundaries(
+        self,
+        tmp_path: pathlib.Path,
+        caplog: pytest.LogCaptureFixture,
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """The config and scan boundaries emit informational records."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        with caplog.at_level(logging.INFO, logger="ambrleaks"):
+            assert main([str(tmp_path)]) == 1, "findings must fail the run"
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("loaded configuration" in m for m in messages), (
+            "the configuration boundary must be logged"
+        )
+        assert any("scan produced" in m for m in messages), (
+            "the scan boundary must log a finding count"
+        )
+
+    def test_logs_baseline_suppression(
+        self,
+        tmp_path: pathlib.Path,
+        caplog: pytest.LogCaptureFixture,
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """Baseline application logs how many findings it suppressed."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        baseline = tmp_path / "baseline.json"
+        with caplog.at_level(logging.INFO, logger="ambrleaks"):
+            assert main([str(tmp_path), "--write-baseline", str(baseline)]) == 0
+            assert main([str(tmp_path), "--baseline", str(baseline)]) == 0
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("wrote baseline" in m for m in messages), (
+            "writing a baseline must be logged"
+        )
+        assert any("baseline suppressed" in m for m in messages), (
+            "baseline hits must be logged"
+        )
+
+    def test_logs_scan_failure(
+        self, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A boundary failure is logged at error level."""
+        with caplog.at_level(logging.ERROR, logger="ambrleaks"):
+            exit_code = main([str(tmp_path), "--config", str(tmp_path / "absent.toml")])
+        assert exit_code == 2, "an unreadable configuration must exit 2"
+        assert any("scan failed" in r.getMessage() for r in caplog.records), (
+            "scan failures must be logged"
+        )
+
+    def test_verbose_surfaces_logs_on_stderr(
+        self,
+        tmp_path: pathlib.Path,
+        capsys: pytest.CaptureFixture[str],
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """``--verbose`` routes the boundary logs to stderr."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        assert main([str(tmp_path), "--verbose"]) == 1, "findings must fail the run"
+        assert "ambrleaks: INFO:" in capsys.readouterr().err, (
+            "--verbose must surface the boundary logs on stderr"
+        )
+
+    def test_default_run_emits_no_log_output(
+        self,
+        tmp_path: pathlib.Path,
+        capsys: pytest.CaptureFixture[str],
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """Without ``--verbose`` the boundary logs stay silent."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        assert main([str(tmp_path)]) == 1, "findings must fail the run"
+        assert "INFO" not in capsys.readouterr().err, (
+            "boundary logs must not appear in default output"
+        )
+
+    def test_repeated_verbose_does_not_stack_handlers(
+        self,
+        tmp_path: pathlib.Path,
+        write_snapshot: cabc.Callable[[pathlib.Path, str], pathlib.Path],
+    ) -> None:
+        """A second ``--verbose`` run reuses the existing stderr handler."""
+        write_snapshot(tmp_path, _SNAPSHOT)
+        assert main([str(tmp_path), "--verbose"]) == 1
+        assert main([str(tmp_path), "--verbose"]) == 1
+        attached = [
+            h for h in logger.handlers if not isinstance(h, logging.NullHandler)
+        ]
+        assert len(attached) == 1, "verbose logging must not stack handlers"

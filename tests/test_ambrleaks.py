@@ -8,7 +8,7 @@ import typing as typ
 import pytest
 
 from df12_python_lints.ambrleaks import DEFAULT_RULES, main, scan_file
-from df12_python_lints.ambrleaks.cli import (
+from df12_python_lints.ambrleaks.config import (
     default_config,
     read_config,
     select_rules,

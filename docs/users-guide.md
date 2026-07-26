@@ -232,9 +232,10 @@ built-in allowlists:
 | `snapshot-posix-path`   | Absolute POSIX paths of three or more segments                           | on      |
 | `snapshot-windows-path` | Drive-letter and UNC paths                                               | on      |
 
-Each finding's value is masked by default (for example `a***************o`)
-so reports can be shared safely, such as in CI logs; pass `--show-values` to
-print the full unredacted value.
+Each finding's value is masked by default (for example `a***************o`) so
+reports can be shared safely, such as in CI logs; pass `--show-values` to print
+the full unredacted value. Pass `-v` / `--verbose` to log the configuration,
+scan, and baseline boundaries to stderr; these logs are silent otherwise.
 
 Exit status is `0` for a clean tree and `1` when findings remain.
 
