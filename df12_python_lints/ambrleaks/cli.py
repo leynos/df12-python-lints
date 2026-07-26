@@ -271,12 +271,7 @@ def _enable_verbose_logging() -> None:
 def _count_stream(
     findings: cabc.Iterable[Finding], total: list[int]
 ) -> cabc.Iterator[Finding]:
-    """Yield *findings* unchanged, adding each to ``total[0]`` as it passes.
-
-    Lets the caller count a streamed scan incrementally — without a second
-    pass or materialising the findings — by reading ``total[0]`` once the
-    downstream consumer has drained the stream.
-    """
+    """Yield *findings* unchanged, incrementing ``total[0]`` for each."""
     for finding in findings:
         total[0] += 1
         yield finding

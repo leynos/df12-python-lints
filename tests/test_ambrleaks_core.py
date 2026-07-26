@@ -286,7 +286,13 @@ class TestWriteBaseline:
             """Marker error raised while the baseline is being written."""
 
         def _source() -> cabc.Iterator[Finding]:
-            """Yield one finding, then fail before the stream completes."""
+            """Yield one finding, then fail before the stream completes.
+
+            Examples
+            --------
+            The first ``next()`` yields ``finding``; the second raises
+            ``_WriteError``, aborting ``write_baseline`` mid-stream.
+            """
             yield finding
             raise _WriteError
 
