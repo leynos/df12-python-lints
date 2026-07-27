@@ -53,7 +53,7 @@ _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
 _LINT_DIRECTIVE: typ.Final = re.compile(
     (
         r"\bnoqa\b"
-        r"|\bruff\s*:\s*(?:ignore|file-ignore|disable)\["
+        r"|\bruff\s*:\s*(?:ignore|file-ignore|disable)\s*\["
         r"|\bpylint\s*:\s*disable"
     ),
     re.IGNORECASE,
@@ -80,7 +80,7 @@ _DIRECTIVE_ONLY_SEGMENT: typ.Final = re.compile(
         (?:(?:ruff|flake8)\s*:\s*)? noqa
             (?:\s*:\s*{_NOQA_CODE_LIST})?
         | ruff\s*:\s*(?:ignore|file-ignore|disable|enable)
-            \[\s*{_RUFF_RULE_LIST}\s*\]
+            \s*\[\s*{_RUFF_RULE_LIST}\s*\]
         | pylint\s*:\s*disable(?:-next|-line)?\s*=\s*{_NAME_LIST}
         | type\s*:\s*ignore (?:\[[\w\s,\-]*\])?
         | (?:pyright|ty)\s*:\s*ignore (?:\[[\w\s,\-]*\])?

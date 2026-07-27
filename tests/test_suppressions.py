@@ -51,6 +51,11 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
                 id="inline-ruff-ignore",
             ),
             pytest.param(
+                "x = 1  # ruff: ignore [E501]\n",
+                _lint_message(1),
+                id="spaced-inline-ruff-ignore",
+            ),
+            pytest.param(
                 "#ruff: ignore[unused-variable,]\nx = 1\n",
                 _lint_message(1),
                 id="preceding-ruff-ignore-with-rule-name",
@@ -61,9 +66,19 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
                 id="ruff-file-ignore",
             ),
             pytest.param(
+                "# ruff: file-ignore [F401, ARG001,]\n",
+                _lint_message(1),
+                id="spaced-ruff-file-ignore",
+            ),
+            pytest.param(
                 "# ruff: disable[E741, F841,]\nx = 1\n",
                 _lint_message(1),
                 id="ruff-disable",
+            ),
+            pytest.param(
+                "# ruff: disable [E741, F841,]\nx = 1\n",
+                _lint_message(1),
+                id="spaced-ruff-disable",
             ),
             pytest.param(
                 "# pylint: disable=too-many-branches\nx = 1\n",
@@ -131,13 +146,13 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
 
     def test_ignores_ruff_enable_directive(self) -> None:
         """A directive ending a suppression range needs no reason."""
-        code = "# ruff: enable[E501]\n"
+        code = "# ruff: enable [E501]\n"
         with self.assertNoMessages():
             self.checker.process_tokens(_tokens(code))
 
     def test_ruff_enable_does_not_explain_next_suppression(self) -> None:
         """A range terminator is not prose explaining the next pragma."""
-        code = "# ruff: enable[E501]\nx = 1  # ruff: ignore[F841]\n"
+        code = "# ruff: enable [E501]\nx = 1  # ruff: ignore [F841]\n"
         with self.assertAddsMessages(_lint_message(2), ignore_position=True):
             self.checker.process_tokens(_tokens(code))
 
