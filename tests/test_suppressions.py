@@ -36,6 +36,36 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         [
             pytest.param("x = 1  # noqa: E501\n", _lint_message(1), id="bare-noqa"),
             pytest.param(
+                "x = 1  # noqa: E501 F841,\n",
+                _lint_message(1),
+                id="space-separated-noqa-with-trailing-comma",
+            ),
+            pytest.param(
+                "# flake8: noqa: F401\n",
+                _lint_message(1),
+                id="flake8-file-noqa",
+            ),
+            pytest.param(
+                "x = 1  # ruff: ignore[E501]\n",
+                _lint_message(1),
+                id="inline-ruff-ignore",
+            ),
+            pytest.param(
+                "#ruff: ignore[unused-variable,]\nx = 1\n",
+                _lint_message(1),
+                id="preceding-ruff-ignore-with-rule-name",
+            ),
+            pytest.param(
+                "# ruff: file-ignore[F401, ARG001,]\n",
+                _lint_message(1),
+                id="ruff-file-ignore",
+            ),
+            pytest.param(
+                "# ruff: disable[E741, F841,]\nx = 1\n",
+                _lint_message(1),
+                id="ruff-disable",
+            ),
+            pytest.param(
                 "# pylint: disable=too-many-branches\nx = 1\n",
                 _lint_message(1),
                 id="bare-pylint-disable",
@@ -66,13 +96,13 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
 
     def test_accepts_second_hash_explanation(self) -> None:
         """Prose after a second hash explains the pragma."""
-        code = "x = eval(s)  # noqa: S307  # input is a vetted literal\n"
+        code = "x = eval(s)  # ruff: ignore[S307]  # input is a vetted literal\n"
         with self.assertNoMessages():
             self.checker.process_tokens(_tokens(code))
 
     def test_accepts_trailing_prose_in_pragma_segment(self) -> None:
         """Prose in the same segment as the pragma explains it."""
-        code = "x = 1  # noqa: E501 the URL cannot be wrapped\n"
+        code = "# ruff: file-ignore[E501] generated URLs cannot be wrapped\n"
         with self.assertNoMessages():
             self.checker.process_tokens(_tokens(code))
 
@@ -97,6 +127,18 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         """Comments without pragmas are never reported."""
         code = "# This value is measured in seconds.\nx = 30\n"
         with self.assertNoMessages():
+            self.checker.process_tokens(_tokens(code))
+
+    def test_ignores_ruff_enable_directive(self) -> None:
+        """A directive ending a suppression range needs no reason."""
+        code = "# ruff: enable[E501]\n"
+        with self.assertNoMessages():
+            self.checker.process_tokens(_tokens(code))
+
+    def test_ruff_enable_does_not_explain_next_suppression(self) -> None:
+        """A range terminator is not prose explaining the next pragma."""
+        code = "# ruff: enable[E501]\nx = 1  # ruff: ignore[F841]\n"
+        with self.assertAddsMessages(_lint_message(2), ignore_position=True):
             self.checker.process_tokens(_tokens(code))
 
     def test_flags_both_kinds_in_one_comment(self) -> None:

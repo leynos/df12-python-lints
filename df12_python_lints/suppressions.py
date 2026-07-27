@@ -51,7 +51,11 @@ _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
 }
 
 _LINT_DIRECTIVE: typ.Final = re.compile(
-    r"\bnoqa\b|\bruff\s*:\s*noqa\b|\bpylint\s*:\s*disable",
+    (
+        r"\bnoqa\b"
+        r"|\bruff\s*:\s*(?:ignore|file-ignore|disable)\["
+        r"|\bpylint\s*:\s*disable"
+    ),
     re.IGNORECASE,
 )
 
@@ -60,14 +64,23 @@ _TYPE_DIRECTIVE: typ.Final = re.compile(
     re.IGNORECASE,
 )
 
-# Comma-separated code lists; a space-separated word after the codes is
-# prose, so these deliberately do not admit bare spaces between items.
-_CODE_LIST: typ.Final = r"[A-Za-z0-9]+(?:\s*,\s*[A-Za-z0-9]+)*"
+# Inline `noqa` directives accept comma- or whitespace-separated rule codes.
+# Restricting each item to Ruff's letter-plus-digit shape leaves trailing prose
+# distinguishable.
+_NOQA_CODE_LIST: typ.Final = (
+    r"[A-Za-z]+[0-9]+"
+    r"(?:(?:\s*,\s*|\s+)[A-Za-z]+[0-9]+)*"
+    r"\s*,?"
+)
+_RUFF_RULE_LIST: typ.Final = r"[\w\-]+(?:\s*,\s*[\w\-]+)*\s*,?"
 _NAME_LIST: typ.Final = r"[\w\-]+(?:\s*,\s*[\w\-]+)*"
 
 _DIRECTIVE_ONLY_SEGMENT: typ.Final = re.compile(
     rf"""^\s*(?:
-        (?:ruff\s*:\s*)? noqa (?:\s*:\s*{_CODE_LIST})?
+        (?:(?:ruff|flake8)\s*:\s*)? noqa
+            (?:\s*:\s*{_NOQA_CODE_LIST})?
+        | ruff\s*:\s*(?:ignore|file-ignore|disable|enable)
+            \[\s*{_RUFF_RULE_LIST}\s*\]
         | pylint\s*:\s*disable(?:-next|-line)?\s*=\s*{_NAME_LIST}
         | type\s*:\s*ignore (?:\[[\w\s,\-]*\])?
         | (?:pyright|ty)\s*:\s*ignore (?:\[[\w\s,\-]*\])?
@@ -89,8 +102,8 @@ def _directive_symbols(comment_text: str) -> tuple[str, ...]:
 
     Examples
     --------
-    ``"# noqa: S101"`` maps to the lint suppression symbol; a plain
-    comment maps to an empty tuple.
+    ``"# ruff: ignore[S101]"`` maps to the lint suppression symbol; a
+    plain comment maps to an empty tuple.
     """
     symbols: list[str] = []
     if _LINT_DIRECTIVE.search(comment_text):
@@ -180,8 +193,7 @@ def _collect_comments(
 def _has_preceding_explanation(comments: dict[int, _Comment], row: int) -> bool:
     """Return whether the line above *row* holds an explanatory comment.
 
-    Only a standalone comment that is not itself a suppression pragma
-    counts.
+    Only a standalone comment containing prose beyond any directives counts.
 
     Examples
     --------
@@ -191,4 +203,4 @@ def _has_preceding_explanation(comments: dict[int, _Comment], row: int) -> bool:
     preceding = comments.get(row - 1)
     if preceding is None or not preceding.is_standalone:
         return False
-    return not _directive_symbols(preceding.text)
+    return _has_inline_explanation(preceding.text)

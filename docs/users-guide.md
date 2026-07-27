@@ -123,17 +123,17 @@ import os.path
 join = os.path.join  # flagged
 ```
 
-Use `from os.path import join` instead, so
-importers and type checkers see a real import binding. Call results, aliases of
-names defined in the same module, and assignments inside functions are not
-flagged.
+Use `from os.path import join` instead, so importers and type checkers see a
+real import binding. Call results, aliases of names defined in the same module,
+and assignments inside functions are not flagged.
 
 ### Suppressions without explanations (C9106, C9107)
 
 Two checkers require every suppression pragma to record a reason:
 
 - `lint-suppression-without-explanation` (C9106) covers lint pragmas:
-  `noqa`, `ruff: noqa`, and `pylint: disable`.
+  `noqa`, `ruff: noqa`, `ruff: ignore`, `ruff: file-ignore`, `ruff: disable`,
+  and `pylint: disable`.
 - `typecheck-suppression-without-explanation` (C9107) covers type-check
   pragmas: `type: ignore`, `pyright: ignore`, `ty: ignore`, and `mypy:`.
 
