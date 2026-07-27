@@ -187,7 +187,7 @@ def _uses_class_cell(method: nodes.FunctionDef) -> bool:
 def _declared_state(node: nodes.ClassDef) -> frozenset[str]:
     """Return names visibly declared across *node*'s local base lineage."""
     declared = set(node.locals)
-    for ancestor in node.ancestors(recurs=False):
+    for ancestor in node.ancestors(recurs=True):
         if isinstance(ancestor, nodes.ClassDef):
             declared.update(ancestor.locals)
     return frozenset(declared)
@@ -290,7 +290,7 @@ class LayoutAnalyzer:
     def _local_layout(self, node: nodes.ClassDef) -> Layout:
         """Classify a base declared in the linted module."""
         if has_local_slots(node):
-            return self._field_layout(node)
+            return self._external_layout(node)
         decorator = find_dataclass_decorator(node)
         if decorator is None:
             return Layout.UNSAFE

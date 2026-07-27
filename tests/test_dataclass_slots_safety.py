@@ -157,6 +157,49 @@ class TestDataclassSlotsSafety(DataclassSlotsTestCase):
             "Record",
         )
 
+    def test_empty_slot_marker_lineages_are_neutral(self) -> None:
+        """Several empty-slot bases contribute no conflicting layout."""
+        self.assert_reports(
+            """
+            import dataclasses
+
+            class LeftMarker:
+                __slots__ = ()
+
+            class RightMarker:
+                __slots__ = ()
+
+            @dataclasses.dataclass
+            class Record(LeftMarker, RightMarker):
+                value: int
+            """,
+            "Record",
+        )
+
+    def test_transitive_inherited_field_assignment_still_reports(self) -> None:
+        """A grandparent field remains declared slot-compatible state."""
+        self.assert_reports(
+            """
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Base:
+                value: int
+
+            @dataclasses.dataclass
+            class Middle(Base):
+                label: str
+
+            @dataclasses.dataclass
+            class Child(Middle):
+                def reset(self):
+                    self.value = 0
+            """,
+            "Base",
+            "Middle",
+            "Child",
+        )
+
     def test_multiple_inheritance_suppresses_bases_and_child(self) -> None:
         """Reverse analysis avoids independently slotting combined bases."""
         self.assert_silent(
