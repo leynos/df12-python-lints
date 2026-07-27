@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import math
+import operator
 import tokenize
 import typing as typ
 
@@ -20,11 +21,13 @@ from pylint import testutils
 from pylint.utils import ASTWalker
 
 from df12_python_lints._chains import narrowing_prefix, repeated_subject
+from df12_python_lints._dataclass_analysis import LayoutAnalyzer
 from df12_python_lints.ambrleaks.scanner import shannon_entropy
 from df12_python_lints.constant_chain import ConstantChainChecker
 from df12_python_lints.match_dispatch import MatchDispatchChecker
 from df12_python_lints.snapshot_asserts import SnapshotAssertionChecker
 from df12_python_lints.suppressions import SuppressionCommentChecker
+from tests.dataclass_slots_support import module_classes, parse_module
 
 if typ.TYPE_CHECKING:
     from pylint.checkers import BaseChecker
@@ -35,6 +38,13 @@ _SUBJECTS = st.from_regex(r"v_[a-z]{1,6}", fullmatch=True)
 _OTHER_NAMES = st.from_regex(r"w_[a-z]{1,6}", fullmatch=True)
 _BREAKERS = st.from_regex(r"x_[a-z]{1,6}", fullmatch=True)
 _WORDS = st.from_regex(r"[a-z]{2,8}", fullmatch=True)
+_DATACLASS_KEYWORDS = (
+    ("eq", "False"),
+    ("frozen", "True"),
+    ("kw_only", "True"),
+    ("order", "True"),
+    ("unsafe_hash", "True"),
+)
 
 
 def _walk_symbols(checker_class: type[BaseChecker], code: str) -> list[str]:
@@ -64,6 +74,46 @@ def _constant_chain(subject: str, constants: list[int]) -> str:
         for index, constant in enumerate(constants[1:], start=1)
     )
     return f"def handle({subject}):\n{''.join(branches)}    return -1\n"
+
+
+@st.composite
+def _dataclass_keyword_order(
+    draw: st.DrawFn,
+) -> tuple[tuple[str, str], ...]:
+    """Generate unique dataclass keywords in arbitrary lexical order."""
+    irrelevant = draw(
+        st.lists(
+            st.sampled_from(_DATACLASS_KEYWORDS),
+            unique_by=operator.itemgetter(0),
+        )
+    )
+    slot_value = draw(st.sampled_from([None, "True", "False", "1", "SLOTS"]))
+    keywords = irrelevant + ([] if slot_value is None else [("slots", slot_value)])
+    return tuple(draw(st.permutations(keywords)))
+
+
+class TestDataclassSlotsProperties:
+    """Decorator keyword selection honours the lexical slots contract."""
+
+    @settings(deadline=None)
+    @given(keywords=_dataclass_keyword_order())
+    def test_only_literal_slots_true_is_silent(
+        self, keywords: tuple[tuple[str, str], ...]
+    ) -> None:
+        """Irrelevant options and ordering cannot change slot eligibility."""
+        arguments = ", ".join(f"{name}={value}" for name, value in keywords)
+        module = parse_module(
+            f"""
+            import dataclasses
+            SLOTS = True
+            @dataclasses.dataclass({arguments})
+            class Record:
+                value: int
+            """
+        )
+        class_node = module_classes(module)[0]
+        is_eligible = LayoutAnalyzer(module).is_eligible(class_node)
+        assert is_eligible is not (("slots", "True") in keywords)
 
 
 class TestConstantChainProperties:

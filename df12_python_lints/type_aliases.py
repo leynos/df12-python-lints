@@ -39,7 +39,7 @@ if typ.TYPE_CHECKING:
     from pylint.typing import MessageDefinitionTuple
 
 _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
-    "R9111": (
+    "R9112": (
         "Declare type alias %r with a 'type' statement",
         "prefer-type-statement",
         (
@@ -238,7 +238,7 @@ class TypeAliasChecker(checkers.BaseChecker):
     name : str
         The checker identifier, ``df12-type-aliases``.
     msgs : dict[str, MessageDefinitionTuple]
-        The R9111 ``prefer-type-statement`` message.
+        The R9112 ``prefer-type-statement`` message.
 
     Examples
     --------

@@ -34,6 +34,7 @@ _EXPECTED_SYMBOLS = frozenset({
     "trivial-alias-wrapper",
     "prefer-type-statement",
     "redundant-future-annotations",
+    "prefer-slots-for-dataclass",
 })
 
 _FIXTURE = '''\
@@ -41,11 +42,19 @@ _FIXTURE = '''\
 from __future__ import annotations
 
 import collections.abc as cabc
+import dataclasses
 import os.path
 
 join = os.path.join
 
 Clock = cabc.Callable[[], float]
+
+
+@dataclasses.dataclass
+class Record:
+    """Trigger prefer-slots-for-dataclass."""
+
+    value: int
 
 
 def walk(value):
@@ -181,8 +190,13 @@ def test_clean_module_is_silent_under_the_shim(
     fixture = tmp_path / "fixture_clean.py"
     fixture.write_text(
         '"""A module the df12 checkers have nothing to say about."""\n'
+        "import dataclasses\n"
         "from os.path import join\n\n"
-        '__all__ = ["join"]\n',
+        "@dataclasses.dataclass(slots=True)\n"
+        "class Record:\n"
+        '    """A closed value object with an explicit layout."""\n\n'
+        "    value: int\n\n"
+        '__all__ = ["Record", "join"]\n',
         encoding="utf-8",
     )
     messages = _run_shim_pylint(fixture)

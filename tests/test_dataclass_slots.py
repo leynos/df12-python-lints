@@ -1,0 +1,245 @@
+"""Recognition and state tests for the closed-dataclass slots checker."""
+
+from __future__ import annotations
+
+import pytest
+
+from tests.dataclass_slots_support import DataclassSlotsTestCase
+
+
+class TestDataclassSlotsChecker(DataclassSlotsTestCase):
+    """Exercise decorator recognition and closed-state evidence."""
+
+    @pytest.mark.parametrize(
+        "decorator",
+        [
+            "dataclasses.dataclass",
+            "dataclasses.dataclass()",
+            "dataclasses.dataclass(slots=False)",
+            "dataclasses.dataclass(slots=1)",
+            "dataclasses.dataclass(slots=SLOTS)",
+            "dataclasses.dataclass(**DATACLASS_OPTIONS)",
+            "dataclasses.dataclass(frozen=True)",
+            "dataclasses.dataclass(order=True)",
+            "dataclasses.dataclass(eq=False)",
+            "dataclasses.dataclass(kw_only=True)",
+            "dataclasses.dataclass(weakref_slot=True)",
+        ],
+    )
+    def test_reports_non_literal_slots(self, decorator: str) -> None:
+        """Only the singleton literal ``True`` requests generated slots."""
+        self.assert_reports(
+            f"""
+            import dataclasses
+            SLOTS = True
+            DATACLASS_OPTIONS = {{"slots": True}}
+
+            @{decorator}
+            class Record:
+                value: int
+            """,
+            "Record",
+        )
+
+    @pytest.mark.parametrize(
+        ("import_line", "decorator"),
+        [
+            ("import dataclasses as dc", "dc.dataclass"),
+            ("from dataclasses import dataclass as record", "record"),
+        ],
+    )
+    def test_reports_import_aliases(self, import_line: str, decorator: str) -> None:
+        """Module and direct decorator aliases retain their stdlib identity."""
+        self.assert_reports(
+            f"""
+            {import_line}
+
+            @{decorator}
+            class Record:
+                value: int
+            """,
+            "Record",
+        )
+
+    def test_reports_public_private_nested_and_zero_field_classes(self) -> None:
+        """Naming, nesting, exports, and field count do not create exemptions."""
+        self.assert_reports(
+            """
+            import dataclasses
+            __all__ = ["Public"]
+
+            @dataclasses.dataclass
+            class Public:
+                value: int
+
+            @dataclasses.dataclass
+            class _Private:
+                pass
+
+            class Namespace:
+                @dataclasses.dataclass
+                class Nested:
+                    value: int
+            """,
+            "Public",
+            "_Private",
+            "Nested",
+        )
+
+    def test_reports_safe_decorator_orderings(self) -> None:
+        """Outer decorators and an identity-preserving inner final are safe."""
+        self.assert_reports(
+            """
+            import dataclasses
+            import typing
+
+            def register(cls):
+                return cls
+
+            @register
+            @dataclasses.dataclass
+            class Outer:
+                value: int
+
+            @dataclasses.dataclass
+            @typing.final
+            class Final:
+                value: int
+            """,
+            "Outer",
+            "Final",
+        )
+
+    @pytest.mark.parametrize(
+        "decorator",
+        [
+            "dataclasses.dataclass(slots=True)",
+            "dataclasses.dataclass(slots=True, weakref_slot=True)",
+        ],
+    )
+    def test_literal_slots_is_silent(self, decorator: str) -> None:
+        """Literal generated slots satisfy the policy."""
+        self.assert_silent(
+            f"""
+            import dataclasses
+
+            @{decorator}
+            class Record:
+                value: int
+            """
+        )
+
+    def test_manual_slots_is_silent(self) -> None:
+        """Any explicit local slot layout records a deliberate decision."""
+        self.assert_silent(
+            """
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Record:
+                __slots__ = ("value", "__dict__")
+                value: int
+            """
+        )
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            """
+            def dataclass(cls): return cls
+            @dataclass
+            class Record: pass
+            """,
+            """
+            import dataclasses
+            dataclasses = factory()
+            @dataclasses.dataclass
+            class Record: pass
+            """,
+            """
+            import pydantic.dataclasses
+            @pydantic.dataclasses.dataclass
+            class Record: pass
+            """,
+            """
+            import attrs
+            @attrs.define
+            class Record: pass
+            """,
+            """
+            import msgspec
+            class Record(msgspec.Struct): pass
+            """,
+            """
+            import typing
+            @typing.dataclass_transform()
+            def model(cls): return cls
+            @model
+            class Record: pass
+            """,
+        ],
+    )
+    def test_unrelated_decorators_are_silent(self, source: str) -> None:
+        """Spelling and dataclass-like frameworks cannot trigger the rule."""
+        self.assert_silent(source)
+
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "def reveal(this): return this.__dict__",
+            "def reveal(this): return vars(this)",
+            "def mutate(this, name): setattr(this, name, 1)",
+            "def mutate(this, name): delattr(this, name)",
+            "def mutate(this): this.extra = 1",
+            "def mutate(this): this.extra += 1",
+            "def mutate(this): del this.extra",
+            "def mutate(this, name): object.__setattr__(this, name, 1)",
+            'def mutate(this): object.__setattr__(this, "extra", 1)',
+        ],
+    )
+    def test_open_state_evidence_is_silent(self, method: str) -> None:
+        """Direct method evidence of dictionary-backed state suppresses."""
+        self.assert_silent(
+            f"""
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Record:
+                value: int
+                {method}
+            """
+        )
+
+    def test_cached_property_is_silent(self) -> None:
+        """The real dictionary-backed cached property suppresses."""
+        self.assert_silent(
+            """
+            import dataclasses
+            import functools
+
+            @dataclasses.dataclass
+            class Record:
+                value: int
+
+                @functools.cached_property
+                def doubled(self):
+                    return self.value * 2
+            """
+        )
+
+    def test_declared_init_false_field_assignment_still_reports(self) -> None:
+        """Assignments to declared fields remain slot-compatible."""
+        self.assert_reports(
+            """
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Record:
+                value: int
+                cached: int = dataclasses.field(init=False)
+
+                def __post_init__(instance):
+                    instance.cached = instance.value
+            """,
+            "Record",
+        )
