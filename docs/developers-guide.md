@@ -87,6 +87,24 @@ comment tokens to find suppression pragmas and the explanations that may
 accompany them, because a bare pragma carries no node in the abstract syntax
 tree to attach a check to.
 
+Its Ruff grammar follows Ruff 0.16.0:
+
+- `noqa` and the file-level `ruff: noqa` and `flake8: noqa` aliases accept
+  blanket suppression or rule-code lists.
+- `ruff: ignore[...]`, `ruff: file-ignore[...]`, and `ruff: disable[...]`
+  accept rule codes or preview rule names. Whitespace around the colon, before
+  the opening bracket, and around comma separators is permitted, as is a
+  trailing comma.
+- `ruff: enable[...]` is a range terminator, not a suppression opener. It
+  emits no C9106 diagnostic and is classified as a directive rather than
+  explanatory prose.
+
+A suppression opener is explained by non-directive prose in the same comment
+segment, prose after a second `#`, or a standalone prose comment immediately
+above it. Another pragma on the preceding line never explains it. This includes
+`ruff: enable[...]`: the terminator is neutral, so it neither requires an
+explanation nor supplies one for the next suppression.
+
 The `ambrleaks` subpackage is a separate, standalone scanner exposed as its own
 console script, split into four modules: `rules.py` pairs each detection
 pattern with an optional entropy floor and allowlists, `scanner.py` walks

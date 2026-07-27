@@ -132,10 +132,14 @@ and assignments inside functions are not flagged.
 Two checkers require every suppression pragma to record a reason:
 
 - `lint-suppression-without-explanation` (C9106) covers lint pragmas:
-  `noqa`, `ruff: noqa`, `ruff: ignore`, `ruff: file-ignore`, `ruff: disable`,
-  and `pylint: disable`.
+  `noqa`, `ruff: noqa`, `ruff: ignore`, `ruff: file-ignore`, the paired range
+  directives `ruff: disable` and `ruff: enable`, and `pylint: disable`.
 - `typecheck-suppression-without-explanation` (C9107) covers type-check
   pragmas: `type: ignore`, `pyright: ignore`, `ty: ignore`, and `mypy:`.
+
+`ruff: enable[...]` ends a suppression range rather than suppressing a
+diagnostic itself. It therefore needs no explanation and does not count as an
+explanation for a suppression on the next line.
 
 An explanation may sit after a second `#` in the same comment, as trailing
 prose in the pragma segment, or as a standalone comment on the line above:
