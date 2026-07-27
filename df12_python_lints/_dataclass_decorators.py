@@ -74,8 +74,3 @@ def has_literal_slots(decorator: nodes.NodeNG) -> bool:
         and keyword.value.value is True
         for keyword in decorator.keywords
     )
-
-
-def has_local_slots(node: nodes.ClassDef) -> bool:
-    """Return whether *node* declares ``__slots__`` in its own body."""
-    return "__slots__" in node.locals

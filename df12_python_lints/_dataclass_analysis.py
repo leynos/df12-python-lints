@@ -12,6 +12,10 @@ from ._dataclass_decorators import (
     expression_origin,
     find_dataclass_decorator,
     has_literal_slots,
+)
+from ._dataclass_state import (
+    declared_instance_state,
+    has_declared_instance_fields,
     has_local_slots,
 )
 
@@ -192,15 +196,6 @@ def _uses_class_cell(method: nodes.FunctionDef) -> bool:
     return False
 
 
-def _declared_state(node: nodes.ClassDef) -> frozenset[str]:
-    """Return names visibly declared across *node*'s local base lineage."""
-    declared = set(node.locals)
-    for ancestor in node.ancestors(recurs=True):
-        if isinstance(ancestor, nodes.ClassDef):
-            declared.update(ancestor.locals)
-    return frozenset(declared)
-
-
 def _has_extension_base(node: nodes.ClassDef) -> bool:
     """Return whether *node* directly names a known extension boundary."""
     return any(
@@ -230,7 +225,7 @@ def _methods_require_open_state(
     methods: tuple[nodes.FunctionDef, ...], node: nodes.ClassDef
 ) -> bool:
     """Return whether direct methods demonstrate deliberately open state."""
-    declared_state = _declared_state(node)
+    declared_state = declared_instance_state(node)
     return any(
         _method_requires_open_state(method, declared_state) for method in methods
     )
@@ -277,14 +272,6 @@ def _inferred_class(base: nodes.NodeNG | bases.Proxy) -> nodes.ClassDef | None:
     return candidate if isinstance(candidate, nodes.ClassDef) else None
 
 
-def _has_declared_instance_fields(node: nodes.ClassDef) -> bool:
-    """Return whether *node* visibly declares dataclass instance fields."""
-    return any(
-        isinstance(statement, (nodes.AnnAssign, nodes.Assign))
-        for statement in node.body
-    )
-
-
 def _local_dataclass_base(
     base: nodes.NodeNG | bases.Proxy, module: nodes.Module
 ) -> nodes.ClassDef | None:
@@ -296,15 +283,21 @@ def _local_dataclass_base(
 
 
 def _multiple_inheritance_dataclass_bases(
-    child: nodes.ClassDef, module: nodes.Module
+    child: nodes.ClassDef,
+    module: nodes.Module,
+    base_layout: cabc.Callable[[nodes.NodeNG | bases.Proxy], Layout],
 ) -> tuple[nodes.ClassDef, ...]:
-    """Return local dataclass bases in one direct multiple-inheritance shape."""
+    """Return local dataclass bases in a conflicting slot-layout shape."""
     if len(child.bases) < _MIN_MULTIPLE_BASES:
+        return ()
+    layouts = tuple(base_layout(base) for base in child.bases)
+    if layouts.count(Layout.SLOTTED) <= 1:
         return ()
     return tuple(
         inferred
-        for base in child.bases
-        if (inferred := _local_dataclass_base(base, module)) is not None
+        for base, layout in zip(child.bases, layouts, strict=True)
+        if layout is Layout.SLOTTED
+        and (inferred := _local_dataclass_base(base, module)) is not None
     )
 
 
@@ -316,30 +309,49 @@ class LayoutAnalyzer:
         self.module = module
         self._eligibility: dict[nodes.ClassDef, bool] = {}
         self._visiting: set[nodes.ClassDef] = set()
+        self._multiple_bases: frozenset[nodes.ClassDef] = frozenset()
         self._multiple_bases = self._find_multiple_bases()
+        self._eligibility.clear()
 
     def _find_multiple_bases(self) -> frozenset[nodes.ClassDef]:
         """Find local dataclass bases used in direct multiple inheritance."""
         unsafe: set[nodes.ClassDef] = set()
         for child in self.module.nodes_of_class(nodes.ClassDef):
-            unsafe.update(_multiple_inheritance_dataclass_bases(child, self.module))
+            unsafe.update(
+                _multiple_inheritance_dataclass_bases(
+                    child, self.module, self._base_layout
+                )
+            )
         return frozenset(unsafe)
 
     @staticmethod
     def _field_layout(node: nodes.ClassDef) -> Layout:
         """Return the layout contribution from *node*'s declared fields."""
-        return Layout.SLOTTED if _has_declared_instance_fields(node) else Layout.NEUTRAL
+        return Layout.SLOTTED if has_declared_instance_fields(node) else Layout.NEUTRAL
+
+    def _inherited_layout(self, node: nodes.ClassDef) -> Layout:
+        """Combine the provable layout inherited from *node*'s direct bases."""
+        layouts = tuple(self._base_layout(base) for base in node.bases)
+        if Layout.UNSAFE in layouts or layouts.count(Layout.SLOTTED) > 1:
+            return Layout.UNSAFE
+        return Layout.SLOTTED if Layout.SLOTTED in layouts else Layout.NEUTRAL
 
     def _local_layout(self, node: nodes.ClassDef) -> Layout:
         """Classify a base declared in the linted module."""
+        inherited_layout = self._inherited_layout(node)
+        if inherited_layout is Layout.UNSAFE:
+            return Layout.UNSAFE
         if has_local_slots(node):
-            return self._external_layout(node)
+            own_layout = self._external_layout(node)
+            return max(inherited_layout, own_layout, key=lambda layout: layout.value)
         decorator = find_dataclass_decorator(node)
         if decorator is None:
             return Layout.UNSAFE
-        if has_literal_slots(decorator):
-            return self._field_layout(node)
-        return self._field_layout(node) if self.is_eligible(node) else Layout.UNSAFE
+        if has_literal_slots(decorator) or self.is_eligible(node):
+            own_layout = self._field_layout(node)
+        else:
+            return Layout.UNSAFE
+        return max(inherited_layout, own_layout, key=lambda layout: layout.value)
 
     @staticmethod
     def _external_layout(node: nodes.ClassDef) -> Layout:
@@ -365,11 +377,6 @@ class LayoutAnalyzer:
             return self._local_layout(inferred)
         return self._external_layout(inferred)
 
-    def _bases_are_safe(self, node: nodes.ClassDef) -> bool:
-        """Return whether *node*'s inherited layout is provably slot-only."""
-        layouts = tuple(self._base_layout(base) for base in node.bases)
-        return Layout.UNSAFE not in layouts and layouts.count(Layout.SLOTTED) <= 1
-
     def is_eligible(self, node: nodes.ClassDef) -> bool:
         """Return whether *node* may safely receive generated slots."""
         if node in self._eligibility:
@@ -384,7 +391,7 @@ class LayoutAnalyzer:
             and not has_local_slots(node)
             and node not in self._multiple_bases
             and not has_local_hold_tongue_evidence(node, decorator)
-            and self._bases_are_safe(node)
+            and self._inherited_layout(node) is not Layout.UNSAFE
         )
         self._visiting.remove(node)
         self._eligibility[node] = result

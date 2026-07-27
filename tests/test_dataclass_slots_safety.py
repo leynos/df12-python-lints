@@ -157,6 +157,25 @@ class TestDataclassSlotsSafety(DataclassSlotsTestCase):
             "Record",
         )
 
+    def test_slotted_dataclass_preserves_inherited_dictionary(self) -> None:
+        """Generated slots cannot remove an unslotted ancestor's dictionary."""
+        self.assert_silent(
+            """
+            import dataclasses
+
+            class OpenBase:
+                pass
+
+            @dataclasses.dataclass(slots=True)
+            class SlottedBase(OpenBase):
+                value: int
+
+            @dataclasses.dataclass
+            class Child(SlottedBase):
+                label: str
+            """
+        )
+
     def test_empty_slot_marker_lineages_are_neutral(self) -> None:
         """Several empty-slot bases contribute no conflicting layout."""
         self.assert_reports(
@@ -200,6 +219,25 @@ class TestDataclassSlotsSafety(DataclassSlotsTestCase):
             "Child",
         )
 
+    def test_non_dataclass_annotation_is_not_inherited_state(self) -> None:
+        """An ordinary base annotation does not create instance storage."""
+        self.assert_silent(
+            """
+            import dataclasses
+
+            class Base:
+                __slots__ = ()
+                cache: int
+
+            @dataclasses.dataclass
+            class Child(Base):
+                value: int
+
+                def reset(self):
+                    self.cache = 0
+            """
+        )
+
     def test_multiple_inheritance_suppresses_bases_and_child(self) -> None:
         """Reverse analysis avoids independently slotting combined bases."""
         self.assert_silent(
@@ -215,4 +253,25 @@ class TestDataclassSlotsSafety(DataclassSlotsTestCase):
             class Combined(Left, Right):
                 value: int
             """
+        )
+
+    def test_empty_slot_marker_does_not_suppress_dataclass_lineage(self) -> None:
+        """One non-empty lineage cannot create a slot-layout conflict."""
+        self.assert_reports(
+            """
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Base:
+                value: int
+
+            class EmptySlotsMarker:
+                __slots__ = ()
+
+            @dataclasses.dataclass
+            class Child(Base, EmptySlotsMarker):
+                label: str
+            """,
+            "Base",
+            "Child",
         )

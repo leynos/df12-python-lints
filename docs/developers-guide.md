@@ -32,6 +32,10 @@ Reusable or substantial checker analysis lives in private helper modules:
   decorators from active lexical import bindings. It deliberately avoids
   qualified-name spelling alone, inference that imports the linted program, and
   ambiguous lookup chains.
+- `_dataclass_state.py` distinguishes runtime `__slots__` assignments and real
+  dataclass fields from class-only names. It is the shared source-state
+  boundary for slot-layout and direct-method mutation analysis; keep
+  inheritance and replacement-class decisions out of this module.
 - `_dataclass_analysis.py` classifies direct-method state evidence,
   replacement-class hazards, and inherited layouts for `DataclassSlotsChecker`.
   A `LayoutAnalyzer` is created once per module. It caches eligibility and
@@ -46,13 +50,16 @@ do not suppress. Direct-method analysis uses each method's first instance
 parameter, ignores static methods and nested executable scopes, and regards
 inference ambiguity as a reason to stay silent.
 
-Inherited-layout analysis is transitive. `object` and proven empty-slot marker
+Inherited-layout analysis is transitive, including through a local dataclass
+that already requests generated slots. `object` and proven empty-slot marker
 bases are neutral; a single non-empty slotted lineage is safe; unslotted,
-unknown, variable-length, or conflicting lineages suppress. A local dataclass
-that is itself eligible for R9111 is treated as prospectively slotted, allowing
-a safe single-inheritance chain to report every missing declaration in one run.
-The checker never imports or executes the linted program and never mutates its
-AST.
+unknown, variable-length, or conflicting lineages suppress. Reverse analysis
+suppresses local dataclass bases only when a direct multiple-inheritance shape
+would combine more than one prospectively non-empty slot lineage. A local
+dataclass that is itself eligible for R9111 is treated as prospectively
+slotted, allowing a safe single-inheritance chain to report every missing
+declaration in one run. The checker never imports or executes the linted
+program and never mutates its AST.
 
 `SuppressionCommentChecker` is token-based rather than AST-based: it inspects
 comment tokens to find suppression pragmas and the explanations that may

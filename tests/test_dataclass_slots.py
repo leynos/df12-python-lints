@@ -129,17 +129,40 @@ class TestDataclassSlotsChecker(DataclassSlotsTestCase):
             """
         )
 
-    def test_manual_slots_is_silent(self) -> None:
-        """Any explicit local slot layout records a deliberate decision."""
+    @pytest.mark.parametrize(
+        "declaration",
+        [
+            '__slots__ = ("value", "__dict__")',
+            '__slots__: typing.ClassVar[tuple[str, ...]] = ("value",)',
+        ],
+    )
+    def test_manual_slots_is_silent(self, declaration: str) -> None:
+        """Any runtime local slot layout records a deliberate decision."""
         self.assert_silent(
-            """
+            f"""
             import dataclasses
+            import typing
 
             @dataclasses.dataclass
             class Record:
-                __slots__ = ("value", "__dict__")
+                {declaration}
                 value: int
             """
+        )
+
+    def test_annotation_only_slots_still_reports(self) -> None:
+        """A slots annotation without a runtime value creates no layout."""
+        self.assert_reports(
+            """
+            import dataclasses
+            import typing
+
+            @dataclasses.dataclass
+            class Record:
+                __slots__: typing.ClassVar[tuple[str, ...]]
+                value: int
+            """,
+            "Record",
         )
 
     @pytest.mark.parametrize(
@@ -242,4 +265,31 @@ class TestDataclassSlotsChecker(DataclassSlotsTestCase):
                     instance.cached = instance.value
             """,
             "Record",
+        )
+
+    @pytest.mark.parametrize(
+        "declaration",
+        [
+            "cache = 0",
+            "cache: typing.ClassVar[int] = 0",
+            "cache: dataclasses.InitVar[int] = 0",
+        ],
+    )
+    def test_class_only_attribute_assignment_is_open_state(
+        self, declaration: str
+    ) -> None:
+        """Assigning through an instance to class-only state requires a dict."""
+        self.assert_silent(
+            f"""
+            import dataclasses
+            import typing
+
+            @dataclasses.dataclass
+            class Record:
+                value: int
+                {declaration}
+
+                def reset(self):
+                    self.cache = 1
+            """
         )

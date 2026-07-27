@@ -190,9 +190,9 @@ bindings, including module and direct-import aliases. A local function named
 Only a lexically visible `slots=True` satisfies the generated-layout form.
 `slots=False`, `slots=1`, a named constant, or `**options` still report because
 the class layout should not vary through configuration or indirection. A local
-`__slots__` declaration also satisfies the rule, whatever layout it names. Use
-`weakref_slot=True` alongside `slots=True` when instances require weak
-references.[^dataclass-slots]
+runtime assignment to `__slots__` also satisfies the rule, whatever layout it
+names; an annotation without a value does not. Use `weakref_slot=True` alongside
+`slots=True` when instances require weak references.[^dataclass-slots]
 
 The checker holds its tongue when the source contains hard evidence that
 generated slots would be unsafe, ineffective, or misleading:
@@ -210,9 +210,11 @@ generated slots would be unsafe, ineffective, or misleading:
   cannot accept non-empty slots, or would create conflicting non-empty slot
   lineages through multiple inheritance.
 
-Assignments to declared fields, including `field(init=False)` values populated
-in `__post_init__`, remain slot-compatible. An outer decorator is also safe
-because it sees the replacement class returned by `dataclass(slots=True)`.
+Assignments to actual dataclass fields, including `field(init=False)` values
+populated in `__post_init__`, and to explicit inherited slots remain
+slot-compatible. Plain class attributes, `ClassVar`, and `InitVar` declarations
+do not create instance storage. An outer decorator is also safe because it sees
+the replacement class returned by `dataclass(slots=True)`.
 
 Public naming, export through `__all__`, and the absence of `typing.final` do
 not suppress the message. Keep an intentionally open or compatibility-bound
