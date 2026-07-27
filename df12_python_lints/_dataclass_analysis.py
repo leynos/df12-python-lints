@@ -142,6 +142,21 @@ def _attribute_mutation_is_open(
     )
 
 
+def _node_requires_open_state(
+    node: nodes.NodeNG, parameter: str, declared_state: frozenset[str]
+) -> bool:
+    """Return whether one method descendant demonstrates open instance state."""
+    if _is_instance_dictionary(node, parameter):
+        return True
+    if not isinstance(node, nodes.Call):
+        return _attribute_mutation_is_open(node, parameter, declared_state)
+    return any((
+        _call_requires_dictionary(node, parameter),
+        _object_setattr_is_open(node, parameter, declared_state),
+        _attribute_mutation_is_open(node, parameter, declared_state),
+    ))
+
+
 def _method_requires_open_state(
     method: nodes.FunctionDef, declared_state: frozenset[str]
 ) -> bool:
@@ -149,17 +164,10 @@ def _method_requires_open_state(
     parameter = method.argnames()[0]
     if _decorated_with(method, "functools.cached_property"):
         return True
-    for child in _direct_nodes(method):
-        if _is_instance_dictionary(child, parameter):
-            return True
-        if isinstance(child, nodes.Call):
-            if _call_requires_dictionary(child, parameter):
-                return True
-            if _object_setattr_is_open(child, parameter, declared_state):
-                return True
-        if _attribute_mutation_is_open(child, parameter, declared_state):
-            return True
-    return False
+    return any(
+        _node_requires_open_state(child, parameter, declared_state)
+        for child in _direct_nodes(method)
+    )
 
 
 def _is_zero_argument_super(node: nodes.NodeNG) -> bool:
@@ -210,23 +218,26 @@ def _has_class_header_boundary(node: nodes.ClassDef) -> bool:
         return True
 
 
-def has_local_hold_tongue_evidence(
-    node: nodes.ClassDef, decorator: nodes.NodeNG
-) -> bool:
-    """Return whether local class evidence makes generated slots unsafe."""
-    if _has_class_header_boundary(node) or _has_extension_base(node):
-        return True
-    methods = tuple(_direct_methods(node))
-    if "__init_subclass__" in node.locals:
-        return True
-    if any(
+def _methods_have_class_hazard(methods: tuple[nodes.FunctionDef, ...]) -> bool:
+    """Return whether a direct method makes replacement-class slots unsafe."""
+    return any(
         _decorated_with(method, "abc.abstractmethod") or _uses_class_cell(method)
         for method in methods
-    ):
-        return True
+    )
+
+
+def _methods_require_open_state(
+    methods: tuple[nodes.FunctionDef, ...], node: nodes.ClassDef
+) -> bool:
+    """Return whether direct methods demonstrate deliberately open state."""
     declared_state = _declared_state(node)
-    if any(_method_requires_open_state(method, declared_state) for method in methods):
-        return True
+    return any(
+        _method_requires_open_state(method, declared_state) for method in methods
+    )
+
+
+def _has_unsafe_inner_decorator(node: nodes.ClassDef, decorator: nodes.NodeNG) -> bool:
+    """Return whether an inner decorator may retain the original class."""
     if node.decorators is None:
         return True
     decorator_index = node.decorators.nodes.index(decorator)
@@ -234,6 +245,22 @@ def has_local_hold_tongue_evidence(
         expression_origin(decorator_target(inner)) != "typing.final"
         for inner in node.decorators.nodes[decorator_index + 1 :]
     )
+
+
+def has_local_hold_tongue_evidence(
+    node: nodes.ClassDef, decorator: nodes.NodeNG
+) -> bool:
+    """Return whether local class evidence makes generated slots unsafe."""
+    methods = tuple(_direct_methods(node))
+    if any((
+        _has_class_header_boundary(node),
+        _has_extension_base(node),
+        "__init_subclass__" in node.locals,
+        _methods_have_class_hazard(methods),
+        _methods_require_open_state(methods, node),
+    )):
+        return True
+    return _has_unsafe_inner_decorator(node, decorator)
 
 
 def _inferred_class(base: nodes.NodeNG | bases.Proxy) -> nodes.ClassDef | None:
@@ -258,6 +285,29 @@ def _has_declared_instance_fields(node: nodes.ClassDef) -> bool:
     )
 
 
+def _local_dataclass_base(
+    base: nodes.NodeNG | bases.Proxy, module: nodes.Module
+) -> nodes.ClassDef | None:
+    """Return a local dataclass named by *base*, when inference is unambiguous."""
+    inferred = _inferred_class(base)
+    if inferred is None or inferred.root() is not module:
+        return None
+    return inferred if find_dataclass_decorator(inferred) is not None else None
+
+
+def _multiple_inheritance_dataclass_bases(
+    child: nodes.ClassDef, module: nodes.Module
+) -> tuple[nodes.ClassDef, ...]:
+    """Return local dataclass bases in one direct multiple-inheritance shape."""
+    if len(child.bases) < _MIN_MULTIPLE_BASES:
+        return ()
+    return tuple(
+        inferred
+        for base in child.bases
+        if (inferred := _local_dataclass_base(base, module)) is not None
+    )
+
+
 class LayoutAnalyzer:
     """Cache conservative layout and reverse-inheritance decisions per module."""
 
@@ -272,14 +322,7 @@ class LayoutAnalyzer:
         """Find local dataclass bases used in direct multiple inheritance."""
         unsafe: set[nodes.ClassDef] = set()
         for child in self.module.nodes_of_class(nodes.ClassDef):
-            if len(child.bases) < _MIN_MULTIPLE_BASES:
-                continue
-            for base in child.bases:
-                inferred = _inferred_class(base)
-                if inferred is None or inferred.root() is not self.module:
-                    continue
-                if find_dataclass_decorator(inferred) is not None:
-                    unsafe.add(inferred)
+            unsafe.update(_multiple_inheritance_dataclass_bases(child, self.module))
         return frozenset(unsafe)
 
     @staticmethod
