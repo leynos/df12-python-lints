@@ -94,7 +94,9 @@ Its Ruff grammar follows Ruff 0.16.0:
 - `ruff: ignore[...]`, `ruff: file-ignore[...]`, and `ruff: disable[...]`
   accept rule codes or preview rule names. Whitespace around the colon, before
   the opening bracket, and around comma separators is permitted, as is a
-  trailing comma.
+  trailing comma. Ruff keywords are case-sensitive; `file-ignore`, `disable`,
+  and `enable` are recognized only in standalone comments, while `ignore` may
+  follow code on the same line.
 - `ruff: enable[...]` is a range terminator, not a suppression opener. It
   emits no C9106 diagnostic and is classified as a directive rather than
   explanatory prose.

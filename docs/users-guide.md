@@ -137,6 +137,10 @@ Two checkers require every suppression pragma to record a reason:
 - `typecheck-suppression-without-explanation` (C9107) covers type-check
   pragmas: `type: ignore`, `pyright: ignore`, `ty: ignore`, and `mypy:`.
 
+Ruff directive keywords are case-sensitive. `ruff: file-ignore`,
+`ruff: disable`, and `ruff: enable` must occupy a standalone comment; only
+`ruff: ignore` may follow code on the same line.
+
 `ruff: enable[...]` ends a suppression range rather than suppressing a
 diagnostic itself. It therefore needs no explanation and does not count as an
 explanation for a suppression on the next line.

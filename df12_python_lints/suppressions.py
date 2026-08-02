@@ -51,12 +51,12 @@ _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
 }
 
 _LINT_DIRECTIVE: typ.Final = re.compile(
-    (
-        r"\bnoqa\b"
-        r"|\bruff\s*:\s*(?:ignore|file-ignore|disable)\s*\["
-        r"|\bpylint\s*:\s*disable"
-    ),
+    r"\bnoqa\b|\bpylint\s*:\s*disable",
     re.IGNORECASE,
+)
+_RUFF_INLINE_DIRECTIVE: typ.Final = re.compile(r"\bruff\s*:\s*ignore\s*\[")
+_RUFF_STANDALONE_DIRECTIVE: typ.Final = re.compile(
+    r"\bruff\s*:\s*(?:file-ignore|disable)\s*\["
 )
 
 _TYPE_DIRECTIVE: typ.Final = re.compile(
@@ -79,8 +79,8 @@ _DIRECTIVE_ONLY_SEGMENT: typ.Final = re.compile(
     rf"""^\s*(?:
         (?:(?:ruff|flake8)\s*:\s*)? noqa
             (?:\s*:\s*{_NOQA_CODE_LIST})?
-        | ruff\s*:\s*(?:ignore|file-ignore|disable|enable)
-            \s*\[\s*{_RUFF_RULE_LIST}\s*\]
+        | (?-i:ruff\s*:\s*(?:ignore|file-ignore|disable|enable)
+            \s*\[\s*{_RUFF_RULE_LIST}\s*\])
         | pylint\s*:\s*disable(?:-next|-line)?\s*=\s*{_NAME_LIST}
         | type\s*:\s*ignore (?:\[[\w\s,\-]*\])?
         | (?:pyright|ty)\s*:\s*ignore (?:\[[\w\s,\-]*\])?
@@ -97,8 +97,8 @@ class _Comment(typ.NamedTuple):
     is_standalone: bool
 
 
-def _directive_symbols(comment_text: str) -> tuple[str, ...]:
-    """Return the message symbols for pragmas present in *comment_text*.
+def _directive_symbols(comment: _Comment) -> tuple[str, ...]:
+    """Return the message symbols for pragmas present in *comment*.
 
     Examples
     --------
@@ -106,9 +106,14 @@ def _directive_symbols(comment_text: str) -> tuple[str, ...]:
     plain comment maps to an empty tuple.
     """
     symbols: list[str] = []
-    if _LINT_DIRECTIVE.search(comment_text):
+    has_lint_directive = (
+        _LINT_DIRECTIVE.search(comment.text)
+        or _RUFF_INLINE_DIRECTIVE.search(comment.text)
+        or (comment.is_standalone and _RUFF_STANDALONE_DIRECTIVE.search(comment.text))
+    )
+    if has_lint_directive:
         symbols.append("lint-suppression-without-explanation")
-    if _TYPE_DIRECTIVE.search(comment_text):
+    if _TYPE_DIRECTIVE.search(comment.text):
         symbols.append("typecheck-suppression-without-explanation")
     return tuple(symbols)
 
@@ -160,7 +165,7 @@ class SuppressionCommentChecker(checkers.BaseTokenChecker):
         """
         comments = _collect_comments(tokens)
         for row, comment in sorted(comments.items()):
-            symbols = _directive_symbols(comment.text)
+            symbols = _directive_symbols(comment)
             if not symbols or _has_inline_explanation(comment.text):
                 continue
             if _has_preceding_explanation(comments, row):

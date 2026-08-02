@@ -144,6 +144,28 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         with self.assertNoMessages():
             self.checker.process_tokens(_tokens(code))
 
+    @pytest.mark.parametrize(
+        "code",
+        [
+            pytest.param(
+                "x = 1  # RUFF: ignore[F841]\n",
+                id="uppercase-ruff",
+            ),
+            pytest.param(
+                "x = 1  # ruff: file-ignore[F841]\n",
+                id="inline-file-ignore",
+            ),
+            pytest.param(
+                "x = 1  # ruff: disable[F841]\n",
+                id="inline-disable",
+            ),
+        ],
+    )
+    def test_ignores_invalid_ruff_directives(self, code: str) -> None:
+        """Text that Ruff does not treat as a suppression is not reported."""
+        with self.assertNoMessages():
+            self.checker.process_tokens(_tokens(code))
+
     def test_ignores_ruff_enable_directive(self) -> None:
         """A directive ending a suppression range needs no reason."""
         code = "# ruff: enable [E501]\n"
