@@ -37,7 +37,8 @@ def test_message_ids_remain_unique_after_r9111_integration() -> None:
         for definition in linter.msgs_store.messages
         if definition.symbol in {"prefer-slots-for-dataclass", "prefer-type-statement"}
     }
-    assert by_symbol == {
+    expected = {
         "prefer-slots-for-dataclass": "R9111",
         "prefer-type-statement": "R9112",
     }
+    assert by_symbol == expected, f"unexpected message identifiers: {by_symbol!r}"

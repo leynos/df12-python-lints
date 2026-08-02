@@ -1,4 +1,15 @@
-"""Require slots for closed standard-library dataclasses."""
+"""Require explicit slot layouts for closed standard-library dataclasses.
+
+The plugin reports R9111 when a real :func:`dataclasses.dataclass` appears to
+describe closed instance state but omits both ``slots=True`` and a manual
+``__slots__`` layout.  Conservative analysis suppresses advice when generated
+slots could be unsafe or ineffective.  Load the package plugin with Pylint::
+
+    pylint --load-plugins=df12_python_lints my_package
+
+Loading :mod:`df12_python_lints` registers this checker alongside the package's
+other df12 house-policy checks.
+"""
 
 from __future__ import annotations
 

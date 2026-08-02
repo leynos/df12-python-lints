@@ -12,6 +12,9 @@ documentation set.
 - [Documentation style guide](documentation-style-guide.md) defines the
   spelling, structure, Markdown, Architecture Decision Record (ADR), Request
   for Comments (RFC), and roadmap conventions used by this documentation set.
+- [Version 0.2.0 migration guide](migration-0.2.0.md) explains the new
+  dataclass-slots rule, the reassigned message identifiers, and the required
+  pylint configuration changes.
 
 ## Engineering practice
 

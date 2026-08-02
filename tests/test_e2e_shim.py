@@ -15,6 +15,7 @@ import pathlib
 import re
 import shutil
 import subprocess  # ruff:ignore[suspicious-subprocess-import]  # fixed argv, no shell
+import textwrap
 import typing as typ
 
 import pytest
@@ -117,6 +118,20 @@ def test_report(output):
     assert "footer" in output, "has footer"
 '''
 
+_CLEAN_FIXTURE = '''\
+    """A module the df12 checkers have nothing to say about."""
+    import dataclasses
+    from os.path import join
+
+    @dataclasses.dataclass(slots=True)
+    class Record:
+        """A closed value object with an explicit layout."""
+
+        value: int
+
+    __all__ = ["Record", "join"]
+'''
+
 
 def _shim_reference() -> str:
     """Read the pinned shim ref from the Makefile to avoid drift."""
@@ -188,17 +203,7 @@ def test_clean_module_is_silent_under_the_shim(
 ) -> None:
     """A module with no violations produces no plugin messages."""
     fixture = tmp_path / "fixture_clean.py"
-    fixture.write_text(
-        '"""A module the df12 checkers have nothing to say about."""\n'
-        "import dataclasses\n"
-        "from os.path import join\n\n"
-        "@dataclasses.dataclass(slots=True)\n"
-        "class Record:\n"
-        '    """A closed value object with an explicit layout."""\n\n'
-        "    value: int\n\n"
-        '__all__ = ["Record", "join"]\n',
-        encoding="utf-8",
-    )
+    fixture.write_text(textwrap.dedent(_CLEAN_FIXTURE), encoding="utf-8")
     messages = _run_shim_pylint(fixture)
     plugin_messages = [
         message for message in messages if message["symbol"] in _EXPECTED_SYMBOLS

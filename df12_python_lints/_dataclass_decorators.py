@@ -1,4 +1,9 @@
-"""Binding-aware decorator recognition for standard-library dataclasses."""
+"""Recognize standard-library dataclass decorators and slot arguments.
+
+The :class:`~df12_python_lints.dataclass_slots.DataclassSlotsChecker` uses
+these small classifiers to identify the real imported decorator and literal
+``slots=True`` without executing the linted module or trusting a name alone.
+"""
 
 from __future__ import annotations
 
@@ -47,6 +52,11 @@ def expression_origin(node: nodes.NodeNG | bases.Proxy) -> str | None:
             prefix = expression_origin(expr)
             return f"{prefix}.{attrname}" if prefix is not None else None
     return None
+
+
+def subscript_target(node: nodes.NodeNG | bases.Proxy) -> nodes.NodeNG | bases.Proxy:
+    """Return the expression subscripted by *node*, or *node* itself."""
+    return node.value if isinstance(node, nodes.Subscript) else node
 
 
 def decorator_target(decorator: nodes.NodeNG) -> nodes.NodeNG:

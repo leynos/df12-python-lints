@@ -113,7 +113,10 @@ class TestDataclassSlotsProperties:
         )
         class_node = module_classes(module)[0]
         is_eligible = LayoutAnalyzer(module).is_eligible(class_node)
-        assert is_eligible is not (("slots", "True") in keywords)
+        expected = ("slots", "True") not in keywords
+        assert is_eligible is expected, (
+            f"eligibility mismatch: is_eligible={is_eligible}, keywords={keywords!r}"
+        )
 
 
 class TestConstantChainProperties:

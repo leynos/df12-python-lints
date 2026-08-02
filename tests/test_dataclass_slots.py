@@ -3,12 +3,49 @@
 from __future__ import annotations
 
 import pytest
+from pylint import testutils
 
-from tests.dataclass_slots_support import DataclassSlotsTestCase
+from df12_python_lints.dataclass_slots import _MSGS, DataclassSlotsChecker
+from tests.dataclass_slots_support import (
+    DataclassSlotsTestCase,
+    module_classes,
+    parse_module,
+)
 
 
 class TestDataclassSlotsChecker(DataclassSlotsTestCase):
     """Exercise decorator recognition and closed-state evidence."""
+
+    def test_diagnostic_contract_includes_decorator_location(self) -> None:
+        """The stable diagnostic payload identifies the class and decorator."""
+        module = parse_module(
+            """
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Record:
+                value: int
+            """
+        )
+        class_node = module_classes(module)[0]
+        linter = testutils.UnittestLinter()
+        checker = DataclassSlotsChecker(linter)
+        checker.visit_module(module)
+        checker.visit_classdef(class_node)
+        message = linter.release_messages()[0]
+        assert {
+            "symbol": message.msg_id,
+            "message": _MSGS["R9111"][0] % message.args,
+            "class_argument": message.args,
+            "line": message.line,
+            "column": message.col_offset,
+        } == {
+            "symbol": "prefer-slots-for-dataclass",
+            "message": "Dataclass 'Record' should declare slots=True",
+            "class_argument": ("Record",),
+            "line": 4,
+            "column": 1,
+        }, "the diagnostic contract or decorator attachment changed"
 
     @pytest.mark.parametrize(
         "decorator",

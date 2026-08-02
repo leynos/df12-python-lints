@@ -3,12 +3,79 @@
 from __future__ import annotations
 
 import pytest
+from astroid import nodes
 
-from tests.dataclass_slots_support import DataclassSlotsTestCase
+import df12_python_lints._dataclass_analysis as dataclass_analysis
+from df12_python_lints._dataclass_analysis import LayoutAnalyzer
+from df12_python_lints._dataclass_inference import inferred_class
+from tests.dataclass_slots_support import (
+    DataclassSlotsTestCase,
+    module_classes,
+    parse_module,
+)
 
 
 class TestDataclassSlotsSafety(DataclassSlotsTestCase):
     """Exercise replacement-class and inherited-layout hold-tongue rules."""
+
+    def test_generic_protocol_is_silent(self) -> None:
+        """A subscripted Protocol base remains an extension boundary."""
+        self.assert_silent(
+            """
+            import dataclasses
+            import typing
+
+            T = typing.TypeVar("T")
+
+            @dataclasses.dataclass
+            class Config(typing.Protocol[T]):
+                value: T
+            """
+        )
+
+    def test_instance_inference_unwraps_to_class_definition(self) -> None:
+        """Astroid Instance base candidates retain their defining class."""
+        module = parse_module(
+            """
+            class Base: pass
+            class Child(Base()): pass
+            """
+        )
+        child = next(item for item in module_classes(module) if item.name == "Child")
+        inferred = inferred_class(child.bases[0])
+        assert isinstance(inferred, nodes.ClassDef), (
+            f"expected a ClassDef, got {inferred!r}"
+        )
+        assert inferred.name == "Base", f"expected Base, got {inferred.name!r}"
+
+    def test_failed_eligibility_does_not_leave_visiting_state(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An analysis exception cannot poison later recursion detection."""
+        module = parse_module(
+            """
+            import dataclasses
+            @dataclasses.dataclass
+            class Record:
+                value: int
+            """
+        )
+        class_node = module_classes(module)[0]
+        analyzer = LayoutAnalyzer(module)
+
+        def raise_analysis_error(*_args: object) -> bool:
+            """Raise a synthetic failure during local hazard analysis."""
+            error = RuntimeError("synthetic analysis failure")
+            raise error
+
+        monkeypatch.setattr(
+            dataclass_analysis, "has_local_slots_hazard", raise_analysis_error
+        )
+        with pytest.raises(RuntimeError, match="synthetic analysis failure"):
+            analyzer.is_eligible(class_node)
+        assert class_node not in analyzer._visiting, (
+            "failed analysis must clear recursive-visit state"
+        )
 
     @pytest.mark.parametrize(
         "source",
@@ -252,6 +319,10 @@ class TestDataclassSlotsSafety(DataclassSlotsTestCase):
             @dataclasses.dataclass
             class Combined(Left, Right):
                 value: int
+
+            @dataclasses.dataclass
+            class Chained(Left):
+                label: str
             """
         )
 

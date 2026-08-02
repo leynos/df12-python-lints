@@ -192,7 +192,7 @@ Only a lexically visible `slots=True` satisfies the generated-layout form.
 the class layout should not vary through configuration or indirection. A local
 runtime assignment to `__slots__` also satisfies the rule, whatever layout it
 names; an annotation without a value does not. Use `weakref_slot=True` alongside
-`slots=True` when instances require weak references.[^dataclass-slots]
+`slots=True` when instances require weak references.[^1]
 
 The checker holds its tongue when the source contains hard evidence that
 generated slots would be unsafe, ineffective, or misleading:
@@ -229,7 +229,7 @@ class LegacyRecord:
 
 The `lint-suppression-without-explanation` rule requires that local reason. See
 Python's dataclass and slot-layout documentation for the replacement-class and
-inheritance constraints.[^dataclass-slots][^data-model-slots]
+inheritance constraints.[^1][^2]
 
 ### `prefer-type-statement` (R9112)
 
@@ -268,8 +268,8 @@ which runtime annotation consumers can observe.
 The check respects pylint's `py-version` option; projects whose configured
 baseline still includes 3.13 or older keep the import without noise.
 
-[^dataclass-slots]: [Python 3.12 `dataclasses.dataclass`](https://docs.python.org/3.12/library/dataclasses.html#dataclasses.dataclass)
-[^data-model-slots]: [Python data model notes on `__slots__`](https://docs.python.org/3.12/reference/datamodel.html#slots)
+[^1]: [Python 3.12 `dataclasses.dataclass`](https://docs.python.org/3.12/library/dataclasses.html#dataclasses.dataclass)
+[^2]: [Python data model notes on `__slots__`](https://docs.python.org/3.12/reference/datamodel.html#slots)
 
 ## The ambrleaks Snapshot Scanner
 

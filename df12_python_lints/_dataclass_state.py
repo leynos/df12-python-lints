@@ -1,4 +1,9 @@
-"""Classify statically visible dataclass fields and explicit slot state."""
+"""Classify dataclass fields and explicit runtime slot declarations.
+
+The dataclass-slots analysis uses these helpers to distinguish storage-backed
+instance state from ``ClassVar`` and ``InitVar`` pseudo-fields, including state
+inherited through local dataclass and manually slotted lineages.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,11 @@ import typing as typ
 
 from astroid import nodes
 
-from ._dataclass_decorators import expression_origin, find_dataclass_decorator
+from ._dataclass_decorators import (
+    expression_origin,
+    find_dataclass_decorator,
+    subscript_target,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -18,18 +27,13 @@ _PSEUDO_FIELD_ORIGINS = frozenset({
 })
 
 
-def _annotation_target(annotation: nodes.NodeNG) -> nodes.NodeNG:
-    """Return the imported type expression wrapped by an annotation."""
-    return annotation.value if isinstance(annotation, nodes.Subscript) else annotation
-
-
 def _dataclass_field_name(statement: nodes.NodeNG) -> str | None:
     """Return one real dataclass field name declared by *statement*."""
     if not isinstance(statement, nodes.AnnAssign) or not isinstance(
         statement.target, nodes.AssignName
     ):
         return None
-    origin = expression_origin(_annotation_target(statement.annotation))
+    origin = expression_origin(subscript_target(statement.annotation))
     return None if origin in _PSEUDO_FIELD_ORIGINS else statement.target.name
 
 

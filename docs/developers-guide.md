@@ -31,7 +31,13 @@ Reusable or substantial checker analysis lives in private helper modules:
 - `_dataclass_decorators.py` resolves `dataclasses.dataclass` and related
   decorators from active lexical import bindings. It deliberately avoids
   qualified-name spelling alone, inference that imports the linted program, and
-  ambiguous lookup chains.
+  ambiguous lookup chains. This strict resolver is intentionally distinct from
+  the type-alias checker's import recognition: a dataclass decorator is valid
+  only when one unambiguous active binding proves its identity, while the
+  type-alias checker conservatively classifies a name when its lookup chain
+  contains a supported import. Keep the shared primitives policy-neutral if
+  these implementations are consolidated; do not weaken either checker's
+  ambiguity contract merely to remove similar traversal code.
 - `_dataclass_state.py` distinguishes runtime `__slots__` assignments and real
   dataclass fields from class-only names. It is the shared source-state
   boundary for slot-layout and direct-method mutation analysis; keep

@@ -1,18 +1,26 @@
-"""Conservative Astroid analysis for the dataclass-slots checker."""
+"""Decide when generated dataclass slots are safe and meaningful.
+
+The :class:`~df12_python_lints.dataclass_slots.DataclassSlotsChecker` delegates
+state, extension-boundary, decorator-order, class-cell, and inherited-layout
+analysis to this module.  Its conservative result avoids suggesting slots when
+Astroid cannot prove that a closed layout will remain valid.
+"""
 
 from __future__ import annotations
 
-import enum
+import contextlib
 import typing as typ
 
-from astroid import bases, exceptions, nodes, util
+from astroid import bases, exceptions, nodes
 
 from ._dataclass_decorators import (
     decorator_target,
     expression_origin,
     find_dataclass_decorator,
     has_literal_slots,
+    subscript_target,
 )
+from ._dataclass_inference import Layout, inferred_class
 from ._dataclass_state import (
     declared_instance_state,
     has_declared_instance_fields,
@@ -32,14 +40,6 @@ _VARIABLE_LENGTH_BUILTINS = frozenset({
     "builtins.tuple",
 })
 _MIN_MULTIPLE_BASES = 2
-
-
-class Layout(enum.Enum):
-    """Describe the instance layout contributed by one base lineage."""
-
-    NEUTRAL = enum.auto()
-    SLOTTED = enum.auto()
-    UNSAFE = enum.auto()
 
 
 def _direct_nodes(root: nodes.NodeNG) -> cabc.Iterator[nodes.NodeNG]:
@@ -157,7 +157,6 @@ def _node_requires_open_state(
     return any((
         _call_requires_dictionary(node, parameter),
         _object_setattr_is_open(node, parameter, declared_state),
-        _attribute_mutation_is_open(node, parameter, declared_state),
     ))
 
 
@@ -199,7 +198,8 @@ def _uses_class_cell(method: nodes.FunctionDef) -> bool:
 def _has_extension_base(node: nodes.ClassDef) -> bool:
     """Return whether *node* directly names a known extension boundary."""
     return any(
-        expression_origin(base) in {"abc.ABC", "typing.Protocol"} for base in node.bases
+        expression_origin(subscript_target(base)) in {"abc.ABC", "typing.Protocol"}
+        for base in node.bases
     )
 
 
@@ -242,41 +242,26 @@ def _has_unsafe_inner_decorator(node: nodes.ClassDef, decorator: nodes.NodeNG) -
     )
 
 
-def has_local_hold_tongue_evidence(
-    node: nodes.ClassDef, decorator: nodes.NodeNG
-) -> bool:
+def has_local_slots_hazard(node: nodes.ClassDef, decorator: nodes.NodeNG) -> bool:
     """Return whether local class evidence makes generated slots unsafe."""
     methods = tuple(_direct_methods(node))
-    if any((
-        _has_class_header_boundary(node),
-        _has_extension_base(node),
-        "__init_subclass__" in node.locals,
-        _methods_have_class_hazard(methods),
-        _methods_require_open_state(methods, node),
-    )):
+    checks = (
+        lambda: _has_class_header_boundary(node),
+        lambda: _has_extension_base(node),
+        lambda: "__init_subclass__" in node.locals,
+        lambda: _methods_have_class_hazard(methods),
+        lambda: _methods_require_open_state(methods, node),
+    )
+    if any(check() for check in checks):
         return True
     return _has_unsafe_inner_decorator(node, decorator)
-
-
-def _inferred_class(base: nodes.NodeNG | bases.Proxy) -> nodes.ClassDef | None:
-    """Infer one unambiguous class for *base*, or return ``None``."""
-    try:
-        inferred = list(base.infer())
-    except exceptions.InferenceError:
-        return None
-    if len(inferred) != 1 or inferred[0] is util.Uninferable:
-        return None
-    candidate = inferred[0]
-    if isinstance(candidate, bases.Instance):
-        candidate = candidate._proxied
-    return candidate if isinstance(candidate, nodes.ClassDef) else None
 
 
 def _local_dataclass_base(
     base: nodes.NodeNG | bases.Proxy, module: nodes.Module
 ) -> nodes.ClassDef | None:
     """Return a local dataclass named by *base*, when inference is unambiguous."""
-    inferred = _inferred_class(base)
+    inferred = inferred_class(base)
     if inferred is None or inferred.root() is not module:
         return None
     return inferred if find_dataclass_decorator(inferred) is not None else None
@@ -305,7 +290,12 @@ class LayoutAnalyzer:
     """Cache conservative layout and reverse-inheritance decisions per module."""
 
     def __init__(self, module: nodes.Module) -> None:
-        """Build reverse-inheritance facts for *module*."""
+        """Build reverse-inheritance facts for *module* in two phases.
+
+        ``_find_multiple_bases`` first evaluates provisional eligibility while
+        ``_multiple_bases`` is empty.  Clearing that provisional cache is
+        required before final evaluation incorporates the discovered conflicts.
+        """
         self.module = module
         self._eligibility: dict[nodes.ClassDef, bool] = {}
         self._visiting: set[nodes.ClassDef] = set()
@@ -343,7 +333,7 @@ class LayoutAnalyzer:
             return Layout.UNSAFE
         if has_local_slots(node):
             own_layout = self._external_layout(node)
-            return max(inherited_layout, own_layout, key=lambda layout: layout.value)
+            return max(inherited_layout, own_layout)
         decorator = find_dataclass_decorator(node)
         if decorator is None:
             return Layout.UNSAFE
@@ -351,7 +341,16 @@ class LayoutAnalyzer:
             own_layout = self._field_layout(node)
         else:
             return Layout.UNSAFE
-        return max(inherited_layout, own_layout, key=lambda layout: layout.value)
+        return max(inherited_layout, own_layout)
+
+    @contextlib.contextmanager
+    def _visiting_node(self, node: nodes.ClassDef) -> cabc.Iterator[None]:
+        """Mark *node* as visiting for the duration of recursive analysis."""
+        self._visiting.add(node)
+        try:
+            yield
+        finally:
+            self._visiting.remove(node)
 
     @staticmethod
     def _external_layout(node: nodes.ClassDef) -> Layout:
@@ -366,7 +365,7 @@ class LayoutAnalyzer:
 
     def _base_layout(self, base: nodes.NodeNG | bases.Proxy) -> Layout:
         """Classify one explicit base lineage."""
-        inferred = _inferred_class(base)
+        inferred = inferred_class(base)
         if inferred is None:
             return Layout.UNSAFE
         if inferred.qname() == "builtins.object":
@@ -383,16 +382,15 @@ class LayoutAnalyzer:
             return self._eligibility[node]
         if node in self._visiting:
             return False
-        self._visiting.add(node)
-        decorator = find_dataclass_decorator(node)
-        result = (
-            decorator is not None
-            and not has_literal_slots(decorator)
-            and not has_local_slots(node)
-            and node not in self._multiple_bases
-            and not has_local_hold_tongue_evidence(node, decorator)
-            and self._inherited_layout(node) is not Layout.UNSAFE
-        )
-        self._visiting.remove(node)
+        with self._visiting_node(node):
+            decorator = find_dataclass_decorator(node)
+            result = (
+                decorator is not None
+                and not has_literal_slots(decorator)
+                and not has_local_slots(node)
+                and node not in self._multiple_bases
+                and not has_local_slots_hazard(node, decorator)
+                and self._inherited_layout(node) is not Layout.UNSAFE
+            )
         self._eligibility[node] = result
         return result

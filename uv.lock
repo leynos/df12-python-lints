@@ -237,7 +237,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pylint", specifier = ">=3.3" }]
+requires-dist = [{ name = "pylint", specifier = ">=3.3,<5" }]
 
 [package.metadata.requires-dev]
 dev = [
