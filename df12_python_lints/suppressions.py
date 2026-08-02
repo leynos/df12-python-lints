@@ -58,6 +58,7 @@ _RUFF_INLINE_DIRECTIVE: typ.Final = re.compile(r"\bruff\s*:\s*ignore\s*\[")
 _RUFF_STANDALONE_DIRECTIVE: typ.Final = re.compile(
     r"\bruff\s*:\s*(?:file-ignore|disable)\s*\["
 )
+_RUFF_ENABLE_DIRECTIVE: typ.Final = re.compile(r"^\s*#\s*ruff\s*:\s*enable\s*\[")
 
 _TYPE_DIRECTIVE: typ.Final = re.compile(
     r"\btype\s*:\s*ignore\b|\b(?:pyright|ty)\s*:\s*ignore\b|\bmypy\s*:",
@@ -207,5 +208,7 @@ def _has_preceding_explanation(comments: dict[int, _Comment], row: int) -> bool:
     """
     preceding = comments.get(row - 1)
     if preceding is None or not preceding.is_standalone:
+        return False
+    if _RUFF_ENABLE_DIRECTIVE.match(preceding.text):
         return False
     return _has_inline_explanation(preceding.text)

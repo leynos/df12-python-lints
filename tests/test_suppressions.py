@@ -178,6 +178,14 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         with self.assertAddsMessages(_lint_message(2), ignore_position=True):
             self.checker.process_tokens(_tokens(code))
 
+    def test_ruff_enable_with_prose_does_not_explain_next_suppression(self) -> None:
+        """Text trailing a range terminator does not explain a later pragma."""
+        code = (
+            "# ruff: enable [E501] linting resumes here\nx = 1  # ruff: ignore [F841]\n"
+        )
+        with self.assertAddsMessages(_lint_message(2), ignore_position=True):
+            self.checker.process_tokens(_tokens(code))
+
     def test_flags_both_kinds_in_one_comment(self) -> None:
         """A comment mixing lint and type pragmas reports both."""
         code = "y = obj.attr  # noqa: A001  # type: ignore[attr-defined]\n"
