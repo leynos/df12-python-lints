@@ -81,28 +81,44 @@ def _slot_name(value: nodes.NodeNG) -> str | None:
     return inferred.value if inferred.value.isidentifier() else None
 
 
-def _resolved_slot_names(value: nodes.NodeNG) -> frozenset[str] | None:
-    """Resolve and validate one complete ``__slots__`` value."""
-    inferred = _inferred_slot_value(value)
-    if isinstance(inferred, nodes.Const):
-        name = _slot_name(inferred)
-        return frozenset({name}) if name is not None else None
-    if isinstance(inferred, nodes.Dict):
-        elements = tuple(key for key, _ in inferred.items if key is not None)
-        if len(elements) != len(inferred.items):
-            return None
-    elif isinstance(inferred, (nodes.List, nodes.Set, nodes.Tuple)):
-        elements = tuple(inferred.elts)
-    else:
+def _node_elements(values: cabc.Iterable[object]) -> tuple[nodes.NodeNG, ...] | None:
+    """Return *values* when every slot element is an Astroid node."""
+    elements = tuple(values)
+    if not all(isinstance(element, nodes.NodeNG) for element in elements):
         return None
+    return typ.cast("tuple[nodes.NodeNG, ...]", elements)
+
+
+def _slot_elements(value: nodes.NodeNG) -> tuple[nodes.NodeNG, ...] | None:
+    """Return the elements from one statically supported slot value."""
+    if isinstance(value, nodes.Const):
+        return (value,)
+    if isinstance(value, nodes.Dict):
+        elements = tuple(key for key, _ in value.items if key is not None)
+        return _node_elements(elements) if len(elements) == len(value.items) else None
+    if isinstance(value, (nodes.List, nodes.Set, nodes.Tuple)):
+        return _node_elements(value.elts)
+    return None
+
+
+def _validated_slot_names(
+    elements: tuple[nodes.NodeNG, ...],
+) -> frozenset[str] | None:
+    """Validate every element and return the complete set of slot names."""
     names: set[str] = set()
     for element in elements:
-        if not isinstance(element, nodes.NodeNG):
-            return None
         if (name := _slot_name(element)) is None:
             return None
         names.add(name)
     return frozenset(names)
+
+
+def _resolved_slot_names(value: nodes.NodeNG) -> frozenset[str] | None:
+    """Resolve and validate one complete ``__slots__`` value."""
+    inferred = _inferred_slot_value(value)
+    if inferred is None or (elements := _slot_elements(inferred)) is None:
+        return None
+    return _validated_slot_names(elements)
 
 
 def local_slot_names(node: nodes.ClassDef) -> frozenset[str] | None:
