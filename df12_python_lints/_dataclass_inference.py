@@ -10,6 +10,16 @@ import enum
 
 from astroid import bases, exceptions, nodes, util
 
+VARIABLE_LENGTH_BUILTIN_QNAMES = frozenset({
+    "builtins.bytearray",
+    "builtins.bytes",
+    "builtins.dict",
+    "builtins.list",
+    "builtins.set",
+    "builtins.str",
+    "builtins.tuple",
+})
+
 
 class Layout(enum.IntEnum):
     """Describe a base lineage with explicit severity ordering."""

@@ -20,7 +20,11 @@ from ._dataclass_decorators import (
     has_literal_slots,
     subscript_target,
 )
-from ._dataclass_inference import Layout, inferred_class
+from ._dataclass_inference import (
+    VARIABLE_LENGTH_BUILTIN_QNAMES,
+    Layout,
+    inferred_class,
+)
 from ._dataclass_state import (
     declared_instance_state,
     has_declared_instance_fields,
@@ -30,15 +34,6 @@ from ._dataclass_state import (
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-_VARIABLE_LENGTH_BUILTINS = frozenset({
-    "builtins.bytearray",
-    "builtins.bytes",
-    "builtins.dict",
-    "builtins.list",
-    "builtins.set",
-    "builtins.str",
-    "builtins.tuple",
-})
 _MIN_MULTIPLE_BASES = 2
 
 
@@ -299,10 +294,12 @@ class LayoutAnalyzer:
         """
         self.module = module
         self._eligibility: dict[nodes.ClassDef, bool] = {}
+        self._layouts: dict[nodes.ClassDef, Layout] = {}
         self._visiting: set[nodes.ClassDef] = set()
         self._multiple_bases: frozenset[nodes.ClassDef] = frozenset()
         self._multiple_bases = self._find_multiple_bases()
         self._eligibility.clear()
+        self._layouts.clear()
 
     def _find_multiple_bases(self) -> frozenset[nodes.ClassDef]:
         """Find local dataclass bases used in direct multiple inheritance."""
@@ -371,10 +368,12 @@ class LayoutAnalyzer:
             return Layout.UNSAFE
         if inferred.qname() == "builtins.object":
             return Layout.NEUTRAL
-        if inferred.qname() in _VARIABLE_LENGTH_BUILTINS:
+        if inferred.qname() in VARIABLE_LENGTH_BUILTIN_QNAMES:
             return Layout.UNSAFE
         if inferred.root() is self.module:
-            return self._local_layout(inferred)
+            if inferred not in self._layouts:
+                self._layouts[inferred] = self._local_layout(inferred)
+            return self._layouts[inferred]
         return self._external_layout(inferred)
 
     def is_eligible(self, node: nodes.ClassDef) -> bool:

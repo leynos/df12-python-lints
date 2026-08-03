@@ -48,16 +48,26 @@ Reusable or substantial checker analysis lives in private helper modules:
 - `_dataclass_analysis.py` classifies direct-method state evidence,
   replacement-class hazards, and inherited layouts for `DataclassSlotsChecker`.
   A `LayoutAnalyzer` is created once per module. It caches eligibility and
-  performs a reverse inheritance pass before class visits, so local dataclass
-  bases later combined through multiple inheritance are suppressed before
-  either base can report.
+  per-class inherited layouts, and performs a reverse inheritance pass before
+  class visits, so local dataclass bases later combined through multiple
+  inheritance are suppressed before either base can report. The provisional
+  caches are cleared after that reverse pass so final decisions include every
+  discovered conflict.
+
+The runtime dependency is bounded to `pylint>=3.3,<5`. Dataclass base inference
+uses Astroid's private `Instance._proxied` bridge because no public API exposes
+the underlying `ClassDef`; a new Pylint major version therefore requires the
+focused inference and inherited-layout tests to be revalidated before widening
+the range. [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records
+the conservative analysis, caching, and compatibility decision.
 
 The dataclass-slots decorator pass preserves source order. Decorators below
 `dataclass` run first and suppress the check unless they are a proven
 identity-preserving marker; decorators above it see the replacement class and
 do not suppress. Direct-method analysis uses each method's first instance
-parameter, ignores static methods and nested executable scopes, and regards
-inference ambiguity as a reason to stay silent.
+parameter and ignores static methods. Open-state checks do not enter nested
+executable scopes, while replacement-class checks inspect the complete method
+subtree for class-cell capture. Inference ambiguity is a reason to stay silent.
 
 Inherited-layout analysis is transitive, including through a local dataclass
 that already requests generated slots. `object` and proven empty-slot marker
