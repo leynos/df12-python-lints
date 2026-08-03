@@ -29,7 +29,7 @@ also remain efficient for modules containing deep inheritance chains.
 
 - Infer optimistically and report unless a known incompatibility is found.
 - Recompute each complete base lineage for every class visit.
-- Analyze conservatively and memoize eligibility and local inherited layouts.
+- Analyse conservatively and memoize eligibility and local inherited layouts.
 
 ## Decision outcome
 
