@@ -195,12 +195,18 @@ class TestDataclassSlotsChecker(DataclassSlotsTestCase):
     @pytest.mark.parametrize(
         "declaration",
         [
+            '__slots__ = "value"',
             '__slots__ = ("value", "__dict__")',
+            '__slots__ = ["value"]',
+            '__slots__ = {"value"}',
+            '__slots__ = {"value": "field documentation"}',
             '__slots__: typing.ClassVar[tuple[str, ...]] = ("value",)',
+            '_SLOT_NAMES = ("value",)\n__slots__ = _SLOT_NAMES',
         ],
     )
     def test_manual_slots_is_silent(self, declaration: str) -> None:
-        """Any runtime local slot layout records a deliberate decision."""
+        """Valid literal and locally resolved slot layouts satisfy the rule."""
+        declaration = declaration.replace("\n", "\n                ")
         self.assert_silent(
             f"""
             import dataclasses
@@ -223,6 +229,31 @@ class TestDataclassSlotsChecker(DataclassSlotsTestCase):
             @dataclasses.dataclass
             class Record:
                 __slots__: typing.ClassVar[tuple[str, ...]]
+                value: int
+            """,
+            "Record",
+        )
+
+    @pytest.mark.parametrize(
+        "slot_value",
+        [
+            "42",
+            '("value", 42)',
+            '"not a valid identifier"',
+            "SLOT_NAMES",
+            '("value",) if condition else ("other",)',
+        ],
+        ids=["integer", "mixed", "invalid-name", "unresolved", "ambiguous"],
+    )
+    def test_unvalidated_manual_slots_still_reports(self, slot_value: str) -> None:
+        """Invalid, unresolved, and ambiguous slot values do not qualify."""
+        self.assert_reports(
+            f"""
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Record:
+                __slots__ = {slot_value}
                 value: int
             """,
             "Record",

@@ -7,9 +7,10 @@ inherited through local dataclass and manually slotted lineages.
 
 from __future__ import annotations
 
+import itertools
 import typing as typ
 
-from astroid import nodes
+from astroid import exceptions, nodes, util
 
 from ._dataclass_decorators import (
     expression_origin,
@@ -59,34 +60,72 @@ def _slots_value(statement: nodes.NodeNG) -> nodes.NodeNG | None:
     return None
 
 
+def _inferred_slot_value(value: nodes.NodeNG) -> nodes.NodeNG | None:
+    """Return one unambiguous inferred value for a slots expression."""
+    try:
+        inferred = tuple(itertools.islice(value.infer(), 2))
+    except exceptions.InferenceError:
+        return None
+    if len(inferred) != 1 or inferred[0] is util.Uninferable:
+        return None
+    if not isinstance(inferred[0], nodes.NodeNG):
+        return None
+    return inferred[0]
+
+
+def _slot_name(value: nodes.NodeNG) -> str | None:
+    """Return one valid, unambiguously inferred slot name."""
+    inferred = _inferred_slot_value(value)
+    if not isinstance(inferred, nodes.Const) or not isinstance(inferred.value, str):
+        return None
+    return inferred.value if inferred.value.isidentifier() else None
+
+
+def _resolved_slot_names(value: nodes.NodeNG) -> frozenset[str] | None:
+    """Resolve and validate one complete ``__slots__`` value."""
+    inferred = _inferred_slot_value(value)
+    if isinstance(inferred, nodes.Const):
+        name = _slot_name(inferred)
+        return frozenset({name}) if name is not None else None
+    if isinstance(inferred, nodes.Dict):
+        elements = tuple(key for key, _ in inferred.items if key is not None)
+        if len(elements) != len(inferred.items):
+            return None
+    elif isinstance(inferred, (nodes.List, nodes.Set, nodes.Tuple)):
+        elements = tuple(inferred.elts)
+    else:
+        return None
+    names: set[str] = set()
+    for element in elements:
+        if not isinstance(element, nodes.NodeNG):
+            return None
+        if (name := _slot_name(element)) is None:
+            return None
+        names.add(name)
+    return frozenset(names)
+
+
+def local_slot_names(node: nodes.ClassDef) -> frozenset[str] | None:
+    """Return validated names from *node*'s sole direct slots assignment."""
+    values = tuple(
+        value
+        for statement in node.body
+        if (value := _slots_value(statement)) is not None
+    )
+    return _resolved_slot_names(values[0]) if len(values) == 1 else None
+
+
 def has_local_slots(node: nodes.ClassDef) -> bool:
-    """Return whether *node* assigns a runtime ``__slots__`` value."""
-    return any(_slots_value(statement) is not None for statement in node.body)
-
-
-def _literal_slot_names(value: nodes.NodeNG) -> cabc.Iterator[str]:
-    """Yield statically visible names from one explicit slot value."""
-    if isinstance(value, nodes.Const) and isinstance(value.value, str):
-        yield value.value
-        return
-    if isinstance(value, (nodes.List, nodes.Set, nodes.Tuple)):
-        for element in value.elts:
-            if isinstance(element, nodes.Const) and isinstance(element.value, str):
-                yield element.value
-
-
-def _local_slot_names(node: nodes.ClassDef) -> cabc.Iterator[str]:
-    """Yield literal slot names assigned directly by *node*."""
-    for statement in node.body:
-        if (value := _slots_value(statement)) is not None:
-            yield from _literal_slot_names(value)
+    """Return whether *node* has one valid, locally resolved slots value."""
+    return local_slot_names(node) is not None
 
 
 def _local_instance_state(node: nodes.ClassDef) -> cabc.Iterator[str]:
     """Yield instance state declared directly by one class."""
     if find_dataclass_decorator(node) is not None:
         yield from dataclass_field_names(node)
-    yield from _local_slot_names(node)
+    if (slot_names := local_slot_names(node)) is not None:
+        yield from slot_names
 
 
 def declared_instance_state(node: nodes.ClassDef) -> frozenset[str]:

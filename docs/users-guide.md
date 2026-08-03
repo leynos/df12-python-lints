@@ -190,9 +190,11 @@ bindings, including module and direct-import aliases. A local function named
 Only a lexically visible `slots=True` satisfies the generated-layout form.
 `slots=False`, `slots=1`, a named constant, or `**options` still report because
 the class layout should not vary through configuration or indirection. A local
-runtime assignment to `__slots__` also satisfies the rule, whatever layout it
-names; an annotation without a value does not. Use `weakref_slot=True` alongside
-`slots=True` when instances require weak references.[^1]
+runtime assignment to `__slots__` suppresses R9111 only when the checker
+validates a valid, locally resolved slot value. Annotation-only declarations,
+invalid values, unresolved names, and ambiguous values do not qualify. Use
+`weakref_slot=True` alongside `slots=True` when instances require weak
+references.[^1]
 
 The checker holds its tongue when the source contains hard evidence that
 generated slots would be unsafe, ineffective, or misleading:

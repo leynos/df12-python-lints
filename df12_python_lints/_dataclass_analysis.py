@@ -29,6 +29,7 @@ from ._dataclass_state import (
     declared_instance_state,
     has_declared_instance_fields,
     has_local_slots,
+    local_slot_names,
 )
 
 if typ.TYPE_CHECKING:
@@ -331,8 +332,8 @@ class LayoutAnalyzer:
         inherited_layout = self._inherited_layout(node)
         if inherited_layout is Layout.UNSAFE:
             return Layout.UNSAFE
-        if has_local_slots(node):
-            own_layout = self._external_layout(node)
+        if (slot_names := local_slot_names(node)) is not None:
+            own_layout = Layout.SLOTTED if slot_names else Layout.NEUTRAL
             return max(inherited_layout, own_layout)
         decorator = find_dataclass_decorator(node)
         if decorator is None:
