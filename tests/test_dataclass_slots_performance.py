@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import types
 import typing as typ
 
 from df12_python_lints._dataclass_analysis import LayoutAnalyzer
+from df12_python_lints._dataclass_inference import inferred_class
 from tests.dataclass_slots_support import module_classes, parse_module
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     import pytest
     from astroid import nodes
 
@@ -43,3 +47,20 @@ def test_deep_layout_chain_is_classified_once_per_base(
     assert local_layout_calls <= depth - 1, (
         f"expected linear layout analysis, got {local_layout_calls} calls"
     )
+
+
+def test_ambiguous_inference_stops_after_two_candidates() -> None:
+    """Ambiguity detection does not consume an unbounded inference stream."""
+    yielded = 0
+
+    def many_candidates() -> cabc.Iterator[nodes.NodeNG]:
+        """Yield enough opaque candidates to expose eager materialization."""
+        nonlocal yielded
+        while True:
+            yielded += 1
+            yield typ.cast("nodes.NodeNG", object())
+
+    base = typ.cast("nodes.NodeNG", types.SimpleNamespace(infer=many_candidates))
+
+    assert inferred_class(base) is None
+    assert yielded == 2, f"expected two inference candidates, consumed {yielded}"

@@ -182,7 +182,9 @@ def _is_zero_argument_super(node: nodes.NodeNG) -> bool:
 
 def _uses_class_cell(method: nodes.FunctionDef) -> bool:
     """Return whether *method*'s subtree uses a replacement-class hazard."""
-    for child in method.nodes_of_class((nodes.Name, nodes.Call)):
+    for child in method.nodes_of_class(
+        (nodes.Name, nodes.Call), skip_klass=nodes.ClassDef
+    ):
         if isinstance(child, nodes.Name) and child.name == "__class__":
             return True
         if _is_zero_argument_super(child):

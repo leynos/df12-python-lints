@@ -7,6 +7,7 @@ conservative Astroid candidate resolver when classifying every base lineage.
 from __future__ import annotations
 
 import enum
+import itertools
 
 from astroid import bases, exceptions, nodes, util
 
@@ -32,7 +33,7 @@ class Layout(enum.IntEnum):
 def inferred_class(base: nodes.NodeNG | bases.Proxy) -> nodes.ClassDef | None:
     """Infer one unambiguous class for *base*, or return ``None``."""
     try:
-        inferred = list(base.infer())
+        inferred = tuple(itertools.islice(base.infer(), 2))
     except exceptions.InferenceError:
         return None
     if len(inferred) != 1 or inferred[0] is util.Uninferable:
