@@ -24,6 +24,7 @@ _PSEUDO_FIELD_ORIGINS = frozenset({
     "dataclasses.InitVar",
     "dataclasses.KW_ONLY",
     "typing.ClassVar",
+    "typing_extensions.ClassVar",
 })
 
 

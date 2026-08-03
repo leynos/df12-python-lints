@@ -153,6 +153,46 @@ class TestDataclassSlotsSafety(DataclassSlotsTestCase):
             """
         )
 
+    def test_nested_zero_argument_super_is_silent(self) -> None:
+        """A nested closure using zero-argument super makes replacement unsafe."""
+        self.assert_silent(
+            """
+            import dataclasses
+
+            @dataclasses.dataclass
+            class Record:
+                value: int
+
+                def method(self):
+                    def nested():
+                        return super().method()
+
+                    return nested()
+            """
+        )
+
+    @pytest.mark.parametrize(
+        ("protocol_import", "base"),
+        [
+            ("import typing_extensions", "typing_extensions.Protocol"),
+            ("from typing_extensions import Protocol as Proto", "Proto"),
+        ],
+    )
+    def test_typing_extensions_protocol_is_silent(
+        self, protocol_import: str, base: str
+    ) -> None:
+        """Backport Protocol imports remain explicit extension boundaries."""
+        self.assert_silent(
+            f"""
+            import dataclasses
+            {protocol_import}
+
+            @dataclasses.dataclass
+            class Record({base}):
+                value: int
+            """
+        )
+
     def test_two_argument_super_still_reports(self) -> None:
         """Explicit two-argument super does not close over the class cell."""
         self.assert_reports(

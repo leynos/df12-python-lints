@@ -16,6 +16,32 @@ from tests.dataclass_slots_support import (
 class TestDataclassSlotsChecker(DataclassSlotsTestCase):
     """Exercise decorator recognition and closed-state evidence."""
 
+    @pytest.mark.parametrize(
+        ("class_var_import", "annotation"),
+        [
+            ("import typing_extensions", "typing_extensions.ClassVar[int]"),
+            ("from typing_extensions import ClassVar as CV", "CV[int]"),
+        ],
+    )
+    def test_typing_extensions_classvar_is_class_only_state(
+        self, class_var_import: str, annotation: str
+    ) -> None:
+        """Backport ClassVar imports do not declare slotted instance state."""
+        self.assert_silent(
+            f"""
+            import dataclasses
+            {class_var_import}
+
+            @dataclasses.dataclass
+            class Record:
+                value: int
+                cache: {annotation} = 0
+
+                def reset(self):
+                    self.cache = 1
+            """
+        )
+
     def test_diagnostic_contract_includes_decorator_location(self) -> None:
         """The stable diagnostic payload identifies the class and decorator."""
         module = parse_module(

@@ -32,6 +32,10 @@ def test_message_ids_remain_unique_after_r9111_integration() -> None:
     """Dataclass slots owns R9111 and type statements move to R9112."""
     linter = PyLinter()
     df12_python_lints.register(linter)
+    message_ids = [definition.msgid for definition in linter.msgs_store.messages]
+    assert len(message_ids) == len(set(message_ids)), (
+        f"duplicate message identifiers: {message_ids!r}"
+    )
     by_symbol = {
         definition.symbol: definition.msgid
         for definition in linter.msgs_store.messages

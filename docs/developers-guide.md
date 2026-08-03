@@ -11,7 +11,7 @@ checkers, each defined in its own module: `MatchDispatchChecker`,
 `AssertMessageChecker`, `ConstantChainChecker`, `TrivialWrapperChecker`,
 `ReexportAssignmentChecker`, `SuppressionCommentChecker`,
 `SnapshotAssertionChecker`, `DataclassSlotsChecker`, `TypeAliasChecker`, and
-`FutureAnnotationsChecker`. Between them they expose thirteen messages. The
+`FutureAnnotationsChecker`. Between them, they expose thirteen messages. The
 last two are gated on pylint's `py-version` option: the type-alias check needs
 a 3.12+ baseline (PEP 695) and the future-annotations check a 3.14+ baseline
 (PEP 749 deferred evaluation), so the end-to-end shim tests pass
@@ -42,6 +42,9 @@ Reusable or substantial checker analysis lives in private helper modules:
   dataclass fields from class-only names. It is the shared source-state
   boundary for slot-layout and direct-method mutation analysis; keep
   inheritance and replacement-class decisions out of this module.
+- `_dataclass_inference.py` resolves Astroid base candidates to unambiguous
+  class definitions and defines the ordered layout classification used by
+  inherited-layout and replacement-class hazard analysis.
 - `_dataclass_analysis.py` classifies direct-method state evidence,
   replacement-class hazards, and inherited layouts for `DataclassSlotsChecker`.
   A `LayoutAnalyzer` is created once per module. It caches eligibility and

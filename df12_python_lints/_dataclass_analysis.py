@@ -186,8 +186,8 @@ def _is_zero_argument_super(node: nodes.NodeNG) -> bool:
 
 
 def _uses_class_cell(method: nodes.FunctionDef) -> bool:
-    """Return whether *method* directly uses a replacement-class hazard."""
-    for child in _direct_nodes(method):
+    """Return whether *method*'s subtree uses a replacement-class hazard."""
+    for child in method.nodes_of_class((nodes.Name, nodes.Call)):
         if isinstance(child, nodes.Name) and child.name == "__class__":
             return True
         if _is_zero_argument_super(child):
@@ -198,7 +198,8 @@ def _uses_class_cell(method: nodes.FunctionDef) -> bool:
 def _has_extension_base(node: nodes.ClassDef) -> bool:
     """Return whether *node* directly names a known extension boundary."""
     return any(
-        expression_origin(subscript_target(base)) in {"abc.ABC", "typing.Protocol"}
+        expression_origin(subscript_target(base))
+        in {"abc.ABC", "typing.Protocol", "typing_extensions.Protocol"}
         for base in node.bases
     )
 
