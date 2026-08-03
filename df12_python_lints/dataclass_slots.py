@@ -61,14 +61,18 @@ class DataclassSlotsChecker(checkers.BaseChecker):
     name = "df12-dataclass-slots"
     msgs = _MSGS
 
+    # pylint: disable-next=useless-return  # Keep the terminal return explicit.
     def __init__(self, linter: PyLinter) -> None:
         """Initialize without retaining analysis across modules."""
         super().__init__(linter)
         self._analyzer: LayoutAnalyzer | None = None
+        return  # ruff:ignore[useless-return]  # Keep the terminal return explicit.
 
+    # pylint: disable-next=useless-return  # Keep the terminal return explicit.
     def visit_module(self, node: nodes.Module) -> None:
         """Prepare cached reverse-inheritance analysis for *node*."""
         self._analyzer = LayoutAnalyzer(node)
+        return  # ruff:ignore[useless-return]  # Keep the terminal return explicit.
 
     def visit_classdef(self, node: nodes.ClassDef) -> None:
         """Check *node* when it is a real standard-library dataclass."""
@@ -83,3 +87,4 @@ class DataclassSlotsChecker(checkers.BaseChecker):
                 node=decorator,
                 args=(node.name,),
             )
+        return
