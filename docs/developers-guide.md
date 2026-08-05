@@ -66,8 +66,10 @@ The dataclass-slots decorator pass preserves source order. Decorators below
 identity-preserving marker; decorators above it see the replacement class and
 do not suppress. Direct-method analysis uses each method's first instance
 parameter and ignores static methods. Open-state checks do not enter nested
-executable scopes, while replacement-class checks inspect the complete method
-subtree for class-cell capture. Inference ambiguity is a reason to stay silent.
+executable scopes. Replacement-class checks scan nested executable scopes but
+stop at nested `ClassDef` bodies: nested helper classes own their class cells,
+so a helper's zero-argument `super()` is not an outer dataclass hazard.
+Inference ambiguity is a reason to stay silent.
 
 Inherited-layout analysis is transitive, including through a local dataclass
 that already requests generated slots. `object` and proven empty-slot marker

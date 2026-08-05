@@ -35,11 +35,11 @@ also remain efficient for modules containing deep inheritance chains.
 
 In the context of R9111 analysis for standard-library dataclasses, facing
 replacement-class hazards, incomplete inference, and deep inheritance chains,
-we decided for conservative source analysis with per-module eligibility and
-layout caches, and against optimistic inference or repeated lineage traversal,
-to achieve safe diagnostics with linear repeated layout classification,
-accepting additional false negatives and cache invalidation after the
-provisional reverse-inheritance pass.
+conservative source analysis with per-module eligibility and layout caches was
+chosen over optimistic inference or repeated lineage traversal, to achieve safe
+diagnostics with linear repeated layout classification, accepting additional
+false negatives and cache invalidation after the provisional
+reverse-inheritance pass.
 
 The package supports `pylint>=3.3,<5`. A new Pylint major version must preserve
 the covered Astroid `Instance._proxied` behaviour before the upper bound moves.

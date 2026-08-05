@@ -291,9 +291,8 @@ class LayoutAnalyzer:
     def __init__(self, module: nodes.Module) -> None:
         """Build reverse-inheritance facts for *module* in two phases.
 
-        ``_find_multiple_bases`` first evaluates provisional eligibility while
-        ``_multiple_bases`` is empty.  Clearing that provisional cache is
-        required before final evaluation incorporates the discovered conflicts.
+        ``_find_multiple_bases`` evaluates eligibility while ``_multiple_bases``
+        is empty. Clearing that cache lets final evaluation include its conflicts.
         """
         self.module = module
         self._eligibility: dict[nodes.ClassDef, bool] = {}
@@ -333,6 +332,8 @@ class LayoutAnalyzer:
         if inherited_layout is Layout.UNSAFE:
             return Layout.UNSAFE
         if (slot_names := local_slot_names(node)) is not None:
+            if "__dict__" in slot_names:
+                return Layout.UNSAFE
             own_layout = Layout.SLOTTED if slot_names else Layout.NEUTRAL
             return max(inherited_layout, own_layout)
         decorator = find_dataclass_decorator(node)

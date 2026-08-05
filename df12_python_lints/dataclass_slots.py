@@ -25,6 +25,10 @@ if typ.TYPE_CHECKING:
     from pylint.lint import PyLinter
     from pylint.typing import MessageDefinitionTuple
 
+    override = typ.override
+else:  # The project's pylint gate runs the plugin under PyPy 3.11.
+    override = getattr(typ, "override", lambda method: method)
+
 _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
     "R9111": (
         "Dataclass %r should declare slots=True",
@@ -61,6 +65,7 @@ class DataclassSlotsChecker(checkers.BaseChecker):
     name = "df12-dataclass-slots"
     msgs = _MSGS
 
+    @override
     # pylint: disable-next=useless-return  # Keep the terminal return explicit.
     def __init__(self, linter: PyLinter) -> None:
         """Initialize without retaining analysis across modules."""
