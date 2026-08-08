@@ -9,6 +9,12 @@ stems = []
 accepted = [
   # The AST library pylint is built on; not a misspelling of "asteroid".
   "astroid",
+  # Public helper name used in implementation and developer documentation.
+  "Analyzer",
+  "LayoutAnalyzer",
+  # Terms retained verbatim when documenting external APIs and command options.
+  "artifact",
+  "color",
 ]
 
 [words.corrections]

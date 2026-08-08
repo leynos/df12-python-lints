@@ -33,11 +33,12 @@ extend-ignore-re = [
     "(?s)```.*?```",
     "Center \\| Microsoft Learn",
     "\\brust-analyzer\\b",
-    "`[^`\\n]+`",
 ]
 
 [default.extend-words]
 "ASO" = "ASO"
+"Analyzer" = "Analyzer"
+"LayoutAnalyzer" = "LayoutAnalyzer"
 "absolutisable" = "absolutizable"
 "absolutisation" = "absolutization"
 "absolutisations" = "absolutizations"
@@ -146,6 +147,7 @@ extend-ignore-re = [
 "apologizers" = "apologizers"
 "apologizes" = "apologizes"
 "apologizing" = "apologizing"
+"artifact" = "artifact"
 "astroid" = "astroid"
 "atomisable" = "atomizable"
 "atomisation" = "atomization"
@@ -309,6 +311,7 @@ extend-ignore-re = [
 "colonizers" = "colonizers"
 "colonizes" = "colonizes"
 "colonizing" = "colonizing"
+"color" = "color"
 "colourisable" = "colourizable"
 "colourisation" = "colourization"
 "colourisations" = "colourizations"
