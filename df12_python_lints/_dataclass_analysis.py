@@ -1,9 +1,6 @@
 """Decide when generated dataclass slots are safe and meaningful.
 
-The :class:`~df12_python_lints.dataclass_slots.DataclassSlotsChecker` delegates
-state, extension-boundary, decorator-order, class-cell, and inherited-layout
-analysis to this module.  Its conservative result avoids suggesting slots when
-Astroid cannot prove that a closed layout will remain valid.
+The checker delegates conservative analysis here to avoid unsafe suggestions.
 """
 
 from __future__ import annotations
@@ -221,13 +218,10 @@ def _methods_have_class_hazard(methods: tuple[nodes.FunctionDef, ...]) -> bool:
 
 
 def _methods_require_open_state(
-    methods: tuple[nodes.FunctionDef, ...], node: nodes.ClassDef
+    methods: tuple[nodes.FunctionDef, ...], state: frozenset[str]
 ) -> bool:
     """Return whether direct methods demonstrate deliberately open state."""
-    declared_state = declared_instance_state(node)
-    return any(
-        _method_requires_open_state(method, declared_state) for method in methods
-    )
+    return any(_method_requires_open_state(method, state) for method in methods)
 
 
 def _has_unsafe_inner_decorator(node: nodes.ClassDef, decorator: nodes.NodeNG) -> bool:
@@ -241,7 +235,11 @@ def _has_unsafe_inner_decorator(node: nodes.ClassDef, decorator: nodes.NodeNG) -
     )
 
 
-def has_local_slots_hazard(node: nodes.ClassDef, decorator: nodes.NodeNG) -> bool:
+def has_local_slots_hazard(
+    node: nodes.ClassDef,
+    decorator: nodes.NodeNG,
+    state_cache: dict[nodes.ClassDef, frozenset[str]] | None = None,
+) -> bool:
     """Return whether local class evidence makes generated slots unsafe."""
     methods = tuple(_direct_methods(node))
     checks = (
@@ -249,11 +247,13 @@ def has_local_slots_hazard(node: nodes.ClassDef, decorator: nodes.NodeNG) -> boo
         lambda: _has_extension_base(node),
         lambda: "__init_subclass__" in node.locals,
         lambda: _methods_have_class_hazard(methods),
-        lambda: _methods_require_open_state(methods, node),
+        lambda: _methods_require_open_state(
+            methods, declared_instance_state(node, state_cache)
+        ),
     )
-    if any(check() for check in checks):
-        return True
-    return _has_unsafe_inner_decorator(node, decorator)
+    return any(check() for check in checks) or _has_unsafe_inner_decorator(
+        node, decorator
+    )
 
 
 def _local_dataclass_base(
@@ -289,14 +289,14 @@ class LayoutAnalyzer:
     """Cache conservative layout and reverse-inheritance decisions per module."""
 
     def __init__(self, module: nodes.Module) -> None:
-        """Build reverse-inheritance facts for *module* in two phases.
+        """Build inheritance facts in two phases.
 
-        ``_find_multiple_bases`` evaluates eligibility while ``_multiple_bases``
-        is empty. Clearing that cache lets final evaluation include its conflicts.
+        ``_find_multiple_bases`` runs conflict-free; clear ``_eligibility`` after.
         """
         self.module = module
         self._eligibility: dict[nodes.ClassDef, bool] = {}
         self._layouts: dict[nodes.ClassDef, Layout] = {}
+        self._declared_states: dict[nodes.ClassDef, frozenset[str]] = {}
         self._visiting: set[nodes.ClassDef] = set()
         self._multiple_bases: frozenset[nodes.ClassDef] = frozenset()
         self._multiple_bases = self._find_multiple_bases()
@@ -393,7 +393,7 @@ class LayoutAnalyzer:
                 and not has_literal_slots(decorator)
                 and not has_local_slots(node)
                 and node not in self._multiple_bases
-                and not has_local_slots_hazard(node, decorator)
+                and not has_local_slots_hazard(node, decorator, self._declared_states)
                 and self._inherited_layout(node) is not Layout.UNSAFE
             )
         self._eligibility[node] = result

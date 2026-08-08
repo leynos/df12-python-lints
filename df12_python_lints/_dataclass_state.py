@@ -144,19 +144,20 @@ def _local_instance_state(node: nodes.ClassDef) -> cabc.Iterator[str]:
         yield from slot_names
 
 
-def declared_instance_state(node: nodes.ClassDef) -> frozenset[str]:
-    """Return visible dataclass fields and explicit slots across the lineage."""
-    classes = (
-        node,
-        *(
-            ancestor
-            for ancestor in node.ancestors(recurs=True)
-            if isinstance(ancestor, nodes.ClassDef)
-        ),
-    )
-    return frozenset(
-        name for class_node in classes for name in _local_instance_state(class_node)
-    )
+def declared_instance_state(
+    node: nodes.ClassDef,
+    cache: dict[nodes.ClassDef, frozenset[str]] | None = None,
+) -> frozenset[str]:
+    """Return visible dataclass fields and slots, caching each lineage prefix."""
+    state_cache = {} if cache is None else cache
+    if node in state_cache:
+        return state_cache[node]
+    state = set(_local_instance_state(node))
+    for ancestor in node.ancestors(recurs=False):
+        if isinstance(ancestor, nodes.ClassDef):
+            state.update(declared_instance_state(ancestor, state_cache))
+    state_cache[node] = frozenset(state)
+    return state_cache[node]
 
 
 def has_declared_instance_fields(node: nodes.ClassDef) -> bool:
