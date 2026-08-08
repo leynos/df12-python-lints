@@ -32,6 +32,10 @@ class TestDataclassSlotsLayout(DataclassSlotsTestCase):
         child = next(node for node in module_classes(module) if node.name == "Child")
         analyzer = LayoutAnalyzer(module)
 
-        assert analyzer._base_layout(child.bases[0]) is Layout.UNSAFE
-        assert not analyzer.is_eligible(child)
+        assert analyzer._base_layout(child.bases[0]) is Layout.UNSAFE, (
+            "the inherited __dict__ slot must classify the base layout as unsafe"
+        )
+        assert not analyzer.is_eligible(child), (
+            "the child with an inherited instance dictionary must not be eligible"
+        )
         self.assert_silent(source)
