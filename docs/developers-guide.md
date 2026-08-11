@@ -6,18 +6,19 @@ This guide explains the contributor workflow for the generated project.
 
 Pylint discovers the plugin through `register()` in
 `df12_python_lints/__init__.py`, the entry point pylint calls when
-`load-plugins` names the package. It instantiates and registers the nine
+`load-plugins` names the package. It instantiates and registers the ten
 checkers, each defined in its own module: `MatchDispatchChecker`,
 `AssertMessageChecker`, `ConstantChainChecker`, `TrivialWrapperChecker`,
 `ReexportAssignmentChecker`, `SuppressionCommentChecker`,
-`SnapshotAssertionChecker`, `TypeAliasChecker`, and `FutureAnnotationsChecker`.
-Between them they expose twelve messages. The last two are gated on pylint's
-`py-version` option: the type-alias check needs a 3.12+ baseline (PEP 695) and
-the future-annotations check a 3.14+ baseline (PEP 749 deferred evaluation), so
-the end-to-end shim tests pass `--py-version=3.14` explicitly — the shim runs
-under PyPy, whose interpreter version would otherwise gate both checks off.
+`SnapshotAssertionChecker`, `DataclassSlotsChecker`, `TypeAliasChecker`, and
+`FutureAnnotationsChecker`. Between them, they expose thirteen messages. The
+last two are gated on pylint's `py-version` option: the type-alias check needs
+a 3.12+ baseline (PEP 695) and the future-annotations check a 3.14+ baseline
+(PEP 749 deferred evaluation), so the end-to-end shim tests pass
+`--py-version=3.14` explicitly — the shim runs under PyPy, whose interpreter
+version would otherwise gate both checks off.
 
-Logic shared by more than one checker lives in two private helper modules:
+Reusable or substantial checker analysis lives in private helper modules:
 
 - `_chains.py` holds the traversal used by the dispatch-oriented checkers to
   walk a head `if` statement and its `elif` chain. Its pure selection kernels
@@ -27,6 +28,59 @@ Logic shared by more than one checker lives in two private helper modules:
 - `_expressions.py` holds the attribute-chain and name-binding helpers — for
   example resolving the base `Name` of a pure `name.attr.deeper` chain — used
   by the wrapper and re-export checkers.
+- `_dataclass_decorators.py` resolves `dataclasses.dataclass` and related
+  decorators from active lexical import bindings. It deliberately avoids
+  qualified-name spelling alone, inference that imports the linted program, and
+  ambiguous lookup chains. This strict resolver is intentionally distinct from
+  the type-alias checker's import recognition: a dataclass decorator is valid
+  only when one unambiguous active binding proves its identity, while the
+  type-alias checker conservatively classifies a name when its lookup chain
+  contains a supported import. Keep the shared primitives policy-neutral if
+  these implementations are consolidated; do not weaken either checker's
+  ambiguity contract merely to remove similar traversal code.
+- `_dataclass_state.py` distinguishes runtime `__slots__` assignments and real
+  dataclass fields from class-only names. It is the shared source-state
+  boundary for slot-layout and direct-method mutation analysis; keep
+  inheritance and replacement-class decisions out of this module.
+- `_dataclass_inference.py` resolves Astroid base candidates to unambiguous
+  class definitions and defines the ordered layout classification used by
+  inherited-layout and replacement-class hazard analysis.
+- `_dataclass_analysis.py` classifies direct-method state evidence,
+  replacement-class hazards, and inherited layouts for `DataclassSlotsChecker`.
+  A `LayoutAnalyzer` is created once per module. It caches eligibility and
+  per-class inherited layouts, and performs a reverse inheritance pass before
+  class visits, so local dataclass bases later combined through multiple
+  inheritance are suppressed before either base can report. The provisional
+  caches are cleared after that reverse pass so final decisions include every
+  discovered conflict.
+
+The runtime dependency is bounded to `pylint>=3.3,<5`. Dataclass base inference
+uses Astroid's private `Instance._proxied` bridge because no public API exposes
+the underlying `ClassDef`; a new Pylint major version therefore requires the
+focused inference and inherited-layout tests to be revalidated before widening
+the range. [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records
+the conservative analysis, caching, and compatibility decision.
+
+The dataclass-slots decorator pass preserves source order. Decorators below
+`dataclass` run first and suppress the check unless they are a proven
+identity-preserving marker; decorators above it see the replacement class and
+do not suppress. Direct-method analysis uses each method's first instance
+parameter and ignores static methods. Open-state checks do not enter nested
+executable scopes. Replacement-class checks scan nested executable scopes but
+stop at nested `ClassDef` bodies: nested helper classes own their class cells,
+so a helper's zero-argument `super()` is not an outer dataclass hazard.
+Inference ambiguity is a reason to stay silent.
+
+Inherited-layout analysis is transitive, including through a local dataclass
+that already requests generated slots. `object` and proven empty-slot marker
+bases are neutral; a single non-empty slotted lineage is safe; unslotted,
+unknown, variable-length, or conflicting lineages suppress. Reverse analysis
+suppresses local dataclass bases only when a direct multiple-inheritance shape
+would combine more than one prospectively non-empty slot lineage. A local
+dataclass that is itself eligible for R9111 is treated as prospectively
+slotted, allowing a safe single-inheritance chain to report every missing
+declaration in one run. The checker never imports or executes the linted
+program and never mutates its AST.
 
 `SuppressionCommentChecker` is token-based rather than AST-based: it inspects
 comment tokens to find suppression pragmas and the explanations that may

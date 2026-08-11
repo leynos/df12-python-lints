@@ -15,7 +15,7 @@ or from the command line:
 pylint --load-plugins=df12_python_lints my_package
 ```
 
-Loading the plugin registers twelve messages.
+Loading the plugin registers thirteen messages.
 
 ### `prefer-structural-pattern-matching` (R9101)
 
@@ -167,7 +167,73 @@ Comparisons with names (an `expected` fixture or parameter), small literals,
 and asserts outside test functions are never reported. Leaf counting works on
 the AST, so reformatting a literal does not change whether it fires.
 
-### `prefer-type-statement` (R9111)
+### `prefer-slots-for-dataclass` (R9111)
+
+Standard-library dataclasses that describe closed instance state should request
+generated slots:
+
+```python
+import dataclasses
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Coordinate:
+    latitude: float
+    longitude: float
+```
+
+The rule recognizes the real `dataclasses.dataclass` through lexical import
+bindings, including module and direct-import aliases. A local function named
+`dataclass`, a shadowed import, pydantic, attrs, msgspec, and
+`dataclass_transform`-based frameworks are outside its scope.
+
+Only a lexically visible `slots=True` satisfies the generated-layout form.
+`slots=False`, `slots=1`, a named constant, or `**options` still report because
+the class layout should not vary through configuration or indirection. A local
+runtime assignment to `__slots__` suppresses R9111 only when the checker
+validates a valid, locally resolved slot value. Annotation-only declarations,
+invalid values, unresolved names, and ambiguous values do not qualify. Use
+`weakref_slot=True` alongside `slots=True` when instances require weak
+references.[^1]
+
+The checker holds its tongue when the source contains hard evidence that
+generated slots would be unsafe, ineffective, or misleading:
+
+- a direct instance method requires dictionary-backed or undeclared state
+  through `cached_property`, `__dict__`, `vars`, dynamic attribute operations,
+  or assignment to an undeclared instance attribute;
+- the class is an explicit extension boundary through `abc.ABC`,
+  `typing.Protocol`, `abstractmethod`, `__init_subclass__`, an explicit
+  metaclass, or other class-header keywords;
+- a decorator below `dataclass` might retain the original class object;
+- a direct method uses zero-argument `super()` or closes over `__class__` on
+  the supported Python 3.12 and 3.13 runtimes; or
+- an inherited layout is unknown, already supplies an instance dictionary,
+  cannot accept non-empty slots, or would create conflicting non-empty slot
+  lineages through multiple inheritance.
+
+Assignments to actual dataclass fields, including `field(init=False)` values
+populated in `__post_init__`, and to explicit inherited slots remain
+slot-compatible. Plain class attributes, `ClassVar`, and `InitVar` declarations
+do not create instance storage. An outer decorator is also safe because it sees
+the replacement class returned by `dataclass(slots=True)`.
+
+Public naming, export through `__all__`, and the absence of `typing.final` do
+not suppress the message. Keep an intentionally open or compatibility-bound
+class unslotted with a narrow, explained suppression beside the decorator:
+
+```python
+# Compatibility: consumers attach adapter state dynamically.
+@dataclasses.dataclass  # pylint: disable=prefer-slots-for-dataclass
+class LegacyRecord:
+    value: str
+```
+
+The `lint-suppression-without-explanation` rule requires that local reason. See
+Python's dataclass and slot-layout documentation for the replacement-class and
+inheritance constraints.[^1][^2]
+
+### `prefer-type-statement` (R9112)
 
 Module-level type aliases should use the PEP 695 `type` statement, which names
 the intent and defers evaluation of the aliased expression:
@@ -203,6 +269,9 @@ which runtime annotation consumers can observe.
 
 The check respects pylint's `py-version` option; projects whose configured
 baseline still includes 3.13 or older keep the import without noise.
+
+[^1]: [Python 3.12 `dataclasses.dataclass`](https://docs.python.org/3.12/library/dataclasses.html#dataclasses.dataclass)
+[^2]: [Python data model notes on `__slots__`](https://docs.python.org/3.12/reference/datamodel.html#slots)
 
 ## The ambrleaks Snapshot Scanner
 

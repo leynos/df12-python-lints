@@ -78,7 +78,7 @@ ______________________________________________________________________
 
 ## Features
 
-Twelve pylint messages:
+Thirteen pylint messages:
 
 - `prefer-structural-pattern-matching` (R9101) — `isinstance` dispatch on
   one subject should be a `match` statement with class patterns.
@@ -98,7 +98,9 @@ Twelve pylint messages:
 - `prefer-snapshot-assertion` (R9108) and `prefer-snapshot-substring`
   (R9109) — tests asserting against large inline literals or repeatedly probing
   substrings should use a syrupy snapshot.
-- `prefer-type-statement` (R9111) — module-level type aliases should use
+- `prefer-slots-for-dataclass` (R9111) — closed standard-library dataclasses
+  should request generated slots or declare an explicit slot layout.
+- `prefer-type-statement` (R9112) — module-level type aliases should use
   the PEP 695 `type` statement on a 3.12+ baseline.
 - `redundant-future-annotations` (C9112) — `from __future__ import annotations`
   should be removed on a 3.14+ baseline, where deferred evaluation is the

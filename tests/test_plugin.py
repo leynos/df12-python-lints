@@ -16,6 +16,7 @@ def test_register_adds_all_checkers() -> None:
         "df12-match-dispatch",
         "df12-assert-message",
         "df12-constant-chain",
+        "df12-dataclass-slots",
         "df12-trivial-wrapper",
         "df12-reexport-assignment",
         "df12-suppression-comments",
@@ -25,3 +26,23 @@ def test_register_adds_all_checkers() -> None:
     }
     missing = expected - names
     assert not missing, f"checkers failed to register: {sorted(missing)}"
+
+
+def test_message_ids_remain_unique_after_r9111_integration() -> None:
+    """Dataclass slots owns R9111 and type statements move to R9112."""
+    linter = PyLinter()
+    df12_python_lints.register(linter)
+    message_ids = [definition.msgid for definition in linter.msgs_store.messages]
+    assert len(message_ids) == len(set(message_ids)), (
+        f"duplicate message identifiers: {message_ids!r}"
+    )
+    by_symbol = {
+        definition.symbol: definition.msgid
+        for definition in linter.msgs_store.messages
+        if definition.symbol in {"prefer-slots-for-dataclass", "prefer-type-statement"}
+    }
+    expected = {
+        "prefer-slots-for-dataclass": "R9111",
+        "prefer-type-statement": "R9112",
+    }
+    assert by_symbol == expected, f"unexpected message identifiers: {by_symbol!r}"

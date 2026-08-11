@@ -15,6 +15,7 @@ import pathlib
 import re
 import shutil
 import subprocess  # ruff:ignore[suspicious-subprocess-import]  # fixed argv, no shell
+import textwrap
 import typing as typ
 
 import pytest
@@ -34,6 +35,7 @@ _EXPECTED_SYMBOLS = frozenset({
     "trivial-alias-wrapper",
     "prefer-type-statement",
     "redundant-future-annotations",
+    "prefer-slots-for-dataclass",
 })
 
 _FIXTURE = '''\
@@ -41,11 +43,19 @@ _FIXTURE = '''\
 from __future__ import annotations
 
 import collections.abc as cabc
+import dataclasses
 import os.path
 
 join = os.path.join
 
 Clock = cabc.Callable[[], float]
+
+
+@dataclasses.dataclass
+class Record:
+    """Trigger prefer-slots-for-dataclass."""
+
+    value: int
 
 
 def walk(value):
@@ -106,6 +116,20 @@ def test_report(output):
     assert "header" in output, "has header"
     assert "row" in output, "has row"
     assert "footer" in output, "has footer"
+'''
+
+_CLEAN_FIXTURE = '''\
+    """A module the df12 checkers have nothing to say about."""
+    import dataclasses
+    from os.path import join
+
+    @dataclasses.dataclass(slots=True)
+    class Record:
+        """A closed value object with an explicit layout."""
+
+        value: int
+
+    __all__ = ["Record", "join"]
 '''
 
 
@@ -179,12 +203,7 @@ def test_clean_module_is_silent_under_the_shim(
 ) -> None:
     """A module with no violations produces no plugin messages."""
     fixture = tmp_path / "fixture_clean.py"
-    fixture.write_text(
-        '"""A module the df12 checkers have nothing to say about."""\n'
-        "from os.path import join\n\n"
-        '__all__ = ["join"]\n',
-        encoding="utf-8",
-    )
+    fixture.write_text(textwrap.dedent(_CLEAN_FIXTURE), encoding="utf-8")
     messages = _run_shim_pylint(fixture)
     plugin_messages = [
         message for message in messages if message["symbol"] in _EXPECTED_SYMBOLS

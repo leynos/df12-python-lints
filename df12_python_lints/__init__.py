@@ -1,7 +1,7 @@
 """df12-python-lints: pylint checkers for df12 Python conventions.
 
-The package is a pylint plugin. Loading it registers nine checkers
-providing twelve messages:
+The package is a pylint plugin. Loading it registers ten checkers
+providing thirteen messages:
 
 - ``prefer-structural-pattern-matching`` (R9101) flags ``isinstance``
   dispatch chains better expressed as ``match`` statements;
@@ -22,7 +22,9 @@ providing twelve messages:
 - ``prefer-snapshot-assertion`` (R9108) with
   ``prefer-snapshot-substring`` (R9109) flag test assertions better
   expressed as syrupy snapshots; and
-- ``prefer-type-statement`` (R9111) flags module-level type aliases
+- ``prefer-slots-for-dataclass`` (R9111) flags closed standard-library
+  dataclasses that do not request or declare slots;
+- ``prefer-type-statement`` (R9112) flags module-level type aliases
   better declared with the PEP 695 ``type`` statement, while
   ``redundant-future-annotations`` (C9112) flags ``from __future__
   import annotations`` on a 3.14+ baseline; both respect pylint's
@@ -46,6 +48,7 @@ import typing as typ
 
 from .assert_messages import AssertMessageChecker
 from .constant_chain import ConstantChainChecker
+from .dataclass_slots import DataclassSlotsChecker
 from .future_annotations import FutureAnnotationsChecker
 from .match_dispatch import MatchDispatchChecker
 from .reexports import ReexportAssignmentChecker
@@ -60,6 +63,7 @@ if typ.TYPE_CHECKING:
 __all__ = [
     "AssertMessageChecker",
     "ConstantChainChecker",
+    "DataclassSlotsChecker",
     "FutureAnnotationsChecker",
     "MatchDispatchChecker",
     "ReexportAssignmentChecker",
@@ -83,6 +87,7 @@ def register(linter: PyLinter) -> None:
     linter.register_checker(MatchDispatchChecker(linter))
     linter.register_checker(AssertMessageChecker(linter))
     linter.register_checker(ConstantChainChecker(linter))
+    linter.register_checker(DataclassSlotsChecker(linter))
     linter.register_checker(TrivialWrapperChecker(linter))
     linter.register_checker(ReexportAssignmentChecker(linter))
     linter.register_checker(SuppressionCommentChecker(linter))
