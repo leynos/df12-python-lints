@@ -132,14 +132,17 @@ and assignments inside functions are not flagged.
 Two checkers require every suppression pragma to record a reason:
 
 - `lint-suppression-without-explanation` (C9106) covers lint pragmas:
-  `noqa`, `ruff: noqa`, `ruff: ignore`, `ruff: file-ignore`, the paired range
-  directives `ruff: disable` and `ruff: enable`, and `pylint: disable`.
+  `noqa`, `ruff: noqa`, `flake8: noqa`, `ruff: ignore`, `ruff: file-ignore`,
+  the range directive `ruff: disable`, and `pylint: disable`.
 - `typecheck-suppression-without-explanation` (C9107) covers type-check
   pragmas: `type: ignore`, `pyright: ignore`, `ty: ignore`, and `mypy:`.
 
-Ruff directive keywords are case-sensitive. `ruff: file-ignore`,
-`ruff: disable`, and `ruff: enable` must occupy a standalone comment; only
-`ruff: ignore` may follow code on the same line.
+Bare `noqa`, including inline `noqa` after code, is case-insensitive. The
+`ruff: noqa` and `flake8: noqa` file-level aliases have case-sensitive prefixes
+and must occupy standalone comments. Other Ruff directive keywords are also
+case-sensitive: `ruff: file-ignore`, `ruff: disable`, and `ruff: enable` must
+occupy a standalone comment; only `ruff: ignore` may follow code on the same
+line.
 
 `ruff: enable[...]` ends a suppression range rather than suppressing a
 diagnostic itself. It therefore needs no explanation and does not count as an

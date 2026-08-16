@@ -89,8 +89,10 @@ tree to attach a check to.
 
 Its Ruff grammar follows Ruff 0.16.0:
 
-- `noqa` and the file-level `ruff: noqa` and `flake8: noqa` aliases accept
-  blanket suppression or rule-code lists.
+- Bare `noqa` is case-insensitive, including when it follows code on the same
+  line. The file-level `ruff: noqa` and `flake8: noqa` aliases are
+  case-sensitive and must occupy standalone comments; they accept blanket
+  suppression or rule-code lists.
 - `ruff: ignore[...]`, `ruff: file-ignore[...]`, and `ruff: disable[...]`
   accept rule codes or preview rule names. Whitespace around the colon, before
   the opening bracket, and around comma separators is permitted, as is a
