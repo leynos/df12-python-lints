@@ -8,7 +8,11 @@ import tokenize
 import pytest
 from pylint import testutils
 
-from df12_python_lints.suppressions import SuppressionCommentChecker
+from df12_python_lints.suppressions import (
+    SuppressionCommentChecker,
+    _Comment,
+    _directive_symbols,
+)
 
 
 def _tokens(code: str) -> list[tokenize.TokenInfo]:
@@ -165,6 +169,26 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         """Text that Ruff does not treat as a suppression is not reported."""
         with self.assertNoMessages():
             self.checker.process_tokens(_tokens(code))
+
+    @pytest.mark.parametrize(
+        ("comment_text", "is_standalone"),
+        [
+            pytest.param("# ruff: ignore [", True, id="missing-selector"),
+            pytest.param("# ruff: ignore[]", True, id="empty-selector"),
+            pytest.param("# ruff: ignore [F401", True, id="missing-bracket"),
+            pytest.param("# ruff: ignore[F401,,E501]", True, id="bad-separator"),
+            pytest.param("# ruff: IGNORE[F401]", True, id="uppercase-ignore"),
+            pytest.param("# ruff: FILE-IGNORE[F401]", True, id="uppercase-file-ignore"),
+            pytest.param("# ruff: DISABLE[F401]", True, id="uppercase-disable"),
+            pytest.param("# ruff: file-ignore[F401]", False, id="inline-file-ignore"),
+            pytest.param("# ruff: disable[F401]", False, id="inline-disable"),
+        ],
+    )
+    def test_does_not_classify_invalid_ruff_directives(
+        self, comment_text: str, *, is_standalone: bool
+    ) -> None:
+        """Malformed, case-invalid, and inline-only forms are not pragmas."""
+        assert not _directive_symbols(_Comment(comment_text, is_standalone))
 
     def test_ignores_ruff_enable_directive(self) -> None:
         """A directive ending a suppression range needs no reason."""

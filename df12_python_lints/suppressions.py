@@ -54,11 +54,6 @@ _LINT_DIRECTIVE: typ.Final = re.compile(
     r"\bnoqa\b|\bpylint\s*:\s*disable",
     re.IGNORECASE,
 )
-_RUFF_INLINE_DIRECTIVE: typ.Final = re.compile(r"\bruff\s*:\s*ignore\s*\[")
-_RUFF_STANDALONE_DIRECTIVE: typ.Final = re.compile(
-    r"\bruff\s*:\s*(?:file-ignore|disable)\s*\["
-)
-_RUFF_ENABLE_DIRECTIVE: typ.Final = re.compile(r"^\s*#\s*ruff\s*:\s*enable\s*\[")
 
 _TYPE_DIRECTIVE: typ.Final = re.compile(
     r"\btype\s*:\s*ignore\b|\b(?:pyright|ty)\s*:\s*ignore\b|\bmypy\s*:",
@@ -75,6 +70,17 @@ _NOQA_CODE_LIST: typ.Final = (
 )
 _RUFF_RULE_LIST: typ.Final = r"[\w\-]+(?:\s*,\s*[\w\-]+)*\s*,?"
 _NAME_LIST: typ.Final = r"[\w\-]+(?:\s*,\s*[\w\-]+)*"
+_RUFF_INLINE_DIRECTIVE: typ.Final = re.compile(
+    rf"\bruff\s*:\s*ignore\s*\[\s*{_RUFF_RULE_LIST}\s*\](?=\s|$)"
+)
+_RUFF_STANDALONE_DIRECTIVE: typ.Final = re.compile(
+    rf"\bruff\s*:\s*(?:file-ignore|disable)"
+    rf"\s*\[\s*{_RUFF_RULE_LIST}\s*\](?=\s|$)"
+)
+_RUFF_ENABLE_DIRECTIVE: typ.Final = re.compile(
+    rf"^\s*#\s*ruff\s*:\s*enable"
+    rf"\s*\[\s*{_RUFF_RULE_LIST}\s*\](?=\s|$)"
+)
 
 _DIRECTIVE_ONLY_SEGMENT: typ.Final = re.compile(
     rf"""^\s*(?:
@@ -99,13 +105,7 @@ class _Comment(typ.NamedTuple):
 
 
 def _directive_symbols(comment: _Comment) -> tuple[str, ...]:
-    """Return the message symbols for pragmas present in *comment*.
-
-    Examples
-    --------
-    ``"# ruff: ignore[S101]"`` maps to the lint suppression symbol; a
-    plain comment maps to an empty tuple.
-    """
+    """Return message symbols for pragmas present in *comment*."""
     symbols: list[str] = []
     has_lint_directive = (
         _LINT_DIRECTIVE.search(comment.text)
