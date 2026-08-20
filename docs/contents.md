@@ -15,6 +15,9 @@ documentation set.
 - [Version 0.2.0 migration guide](migration-0.2.0.md) explains the new
   dataclass-slots rule, the reassigned message identifiers, and the required
   pylint configuration changes.
+- [Version 0.3.0 migration guide](migration-0.3.0.md) explains the expanded
+  Ruff suppression grammar, explanation requirements, and neutral range
+  terminators.
 - [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 
