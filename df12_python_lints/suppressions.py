@@ -51,7 +51,7 @@ _MSGS: typ.Final[dict[str, MessageDefinitionTuple]] = {
 }
 
 _LINT_DIRECTIVE: typ.Final = re.compile(
-    r"\bnoqa\b|\bruff\s*:\s*noqa\b|\bpylint\s*:\s*disable",
+    r"\bnoqa\b|\bpylint\s*:\s*disable",
     re.IGNORECASE,
 )
 
@@ -60,14 +60,34 @@ _TYPE_DIRECTIVE: typ.Final = re.compile(
     re.IGNORECASE,
 )
 
-# Comma-separated code lists; a space-separated word after the codes is
-# prose, so these deliberately do not admit bare spaces between items.
-_CODE_LIST: typ.Final = r"[A-Za-z0-9]+(?:\s*,\s*[A-Za-z0-9]+)*"
+# Inline `noqa` directives accept comma- or whitespace-separated rule codes.
+# Restricting each item to Ruff's letter-plus-digit shape leaves trailing prose
+# distinguishable.
+_NOQA_CODE_LIST: typ.Final = (
+    r"[A-Za-z]+[0-9]+"
+    r"(?:(?:\s*,\s*|\s+)[A-Za-z]+[0-9]+)*"
+    r"\s*,?"
+)
+_RUFF_RULE_LIST: typ.Final = r"[\w\-]+(?:\s*,\s*[\w\-]+)*\s*,?"
 _NAME_LIST: typ.Final = r"[\w\-]+(?:\s*,\s*[\w\-]+)*"
+_RUFF_INLINE_DIRECTIVE: typ.Final = re.compile(
+    rf"\bruff\s*:\s*ignore\s*\[\s*{_RUFF_RULE_LIST}\s*\](?=\s|$)"
+)
+_RUFF_STANDALONE_DIRECTIVE: typ.Final = re.compile(
+    rf"\bruff\s*:\s*(?:file-ignore|disable)"
+    rf"\s*\[\s*{_RUFF_RULE_LIST}\s*\](?=\s|$)"
+)
+_RUFF_ENABLE_DIRECTIVE: typ.Final = re.compile(
+    rf"^\s*#\s*ruff\s*:\s*enable"
+    rf"\s*\[\s*{_RUFF_RULE_LIST}\s*\](?=\s|$)"
+)
 
 _DIRECTIVE_ONLY_SEGMENT: typ.Final = re.compile(
     rf"""^\s*(?:
-        (?:ruff\s*:\s*)? noqa (?:\s*:\s*{_CODE_LIST})?
+        (?:(?:ruff|flake8)\s*:\s*)? noqa
+            (?:\s*:\s*{_NOQA_CODE_LIST})?
+        | (?-i:ruff\s*:\s*(?:ignore|file-ignore|disable|enable)
+            \s*\[\s*{_RUFF_RULE_LIST}\s*\])
         | pylint\s*:\s*disable(?:-next|-line)?\s*=\s*{_NAME_LIST}
         | type\s*:\s*ignore (?:\[[\w\s,\-]*\])?
         | (?:pyright|ty)\s*:\s*ignore (?:\[[\w\s,\-]*\])?
@@ -84,18 +104,17 @@ class _Comment(typ.NamedTuple):
     is_standalone: bool
 
 
-def _directive_symbols(comment_text: str) -> tuple[str, ...]:
-    """Return the message symbols for pragmas present in *comment_text*.
-
-    Examples
-    --------
-    ``"# noqa: S101"`` maps to the lint suppression symbol; a plain
-    comment maps to an empty tuple.
-    """
+def _directive_symbols(comment: _Comment) -> tuple[str, ...]:
+    """Return message symbols for pragmas present in *comment*."""
     symbols: list[str] = []
-    if _LINT_DIRECTIVE.search(comment_text):
+    has_lint_directive = (
+        _LINT_DIRECTIVE.search(comment.text)
+        or _RUFF_INLINE_DIRECTIVE.search(comment.text)
+        or (comment.is_standalone and _RUFF_STANDALONE_DIRECTIVE.search(comment.text))
+    )
+    if has_lint_directive:
         symbols.append("lint-suppression-without-explanation")
-    if _TYPE_DIRECTIVE.search(comment_text):
+    if _TYPE_DIRECTIVE.search(comment.text):
         symbols.append("typecheck-suppression-without-explanation")
     return tuple(symbols)
 
@@ -147,7 +166,7 @@ class SuppressionCommentChecker(checkers.BaseTokenChecker):
         """
         comments = _collect_comments(tokens)
         for row, comment in sorted(comments.items()):
-            symbols = _directive_symbols(comment.text)
+            symbols = _directive_symbols(comment)
             if not symbols or _has_inline_explanation(comment.text):
                 continue
             if _has_preceding_explanation(comments, row):
@@ -180,8 +199,7 @@ def _collect_comments(
 def _has_preceding_explanation(comments: dict[int, _Comment], row: int) -> bool:
     """Return whether the line above *row* holds an explanatory comment.
 
-    Only a standalone comment that is not itself a suppression pragma
-    counts.
+    Only a standalone comment containing prose beyond any directives counts.
 
     Examples
     --------
@@ -191,4 +209,6 @@ def _has_preceding_explanation(comments: dict[int, _Comment], row: int) -> bool:
     preceding = comments.get(row - 1)
     if preceding is None or not preceding.is_standalone:
         return False
-    return not _directive_symbols(preceding.text)
+    if _RUFF_ENABLE_DIRECTIVE.match(preceding.text):
+        return False
+    return _has_inline_explanation(preceding.text)

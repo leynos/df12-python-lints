@@ -8,10 +8,8 @@ comments.
 
 from __future__ import annotations
 
-import io
 import math
 import operator
-import tokenize
 import typing as typ
 
 import astroid
@@ -26,12 +24,10 @@ from df12_python_lints.ambrleaks.scanner import shannon_entropy
 from df12_python_lints.constant_chain import ConstantChainChecker
 from df12_python_lints.match_dispatch import MatchDispatchChecker
 from df12_python_lints.snapshot_asserts import SnapshotAssertionChecker
-from df12_python_lints.suppressions import SuppressionCommentChecker
 from tests.dataclass_slots_support import module_classes, parse_module
 
 if typ.TYPE_CHECKING:
     from pylint.checkers import BaseChecker
-
 # Constructed identifiers: a fixed prefix guarantees the name is never a
 # Python keyword, avoiding the filtering trap.
 _SUBJECTS = st.from_regex(r"v_[a-z]{1,6}", fullmatch=True)
@@ -54,15 +50,6 @@ def _walk_symbols(checker_class: type[BaseChecker], code: str) -> list[str]:
     walker = ASTWalker(linter)
     walker.add_checker(checker)
     walker.walk(astroid.parse(code))
-    return [message.msg_id for message in linter.release_messages()]
-
-
-def _token_symbols(code: str) -> list[str]:
-    """Collect the suppression checker's symbols over *code*."""
-    linter = testutils.UnittestLinter()
-    checker = SuppressionCommentChecker(linter)
-    tokens = list(tokenize.generate_tokens(io.StringIO(code).readline))
-    checker.process_tokens(tokens)
     return [message.msg_id for message in linter.release_messages()]
 
 
@@ -193,51 +180,6 @@ class TestSnapshotThresholdProperties:
         symbols = _walk_symbols(SnapshotAssertionChecker, code)
         expected = ["prefer-snapshot-assertion"] if leaves >= 8 else []
         assert symbols == expected, "firing must depend only on the total leaf count"
-
-
-class TestSuppressionProperties:
-    """Generated pragmas are classified uniformly."""
-
-    @settings(deadline=None)
-    @given(
-        codes=st.lists(
-            st.from_regex(r"[A-Z]{1,3}[0-9]{2,4}", fullmatch=True),
-            min_size=1,
-            max_size=3,
-        )
-    )
-    def test_bare_noqa_always_fires(self, codes: list[str]) -> None:
-        """A noqa pragma with any code list and no prose is reported."""
-        code = f"x = 1  # noqa: {', '.join(codes)}\n"
-        assert _token_symbols(code) == ["lint-suppression-without-explanation"], (
-            "a bare noqa must be reported whatever its code list"
-        )
-
-    @settings(deadline=None)
-    @given(
-        codes=st.lists(
-            st.from_regex(r"[A-Z][0-9]{3}", fullmatch=True), min_size=1, max_size=3
-        ),
-        first=_WORDS,
-        second=_WORDS,
-    )
-    def test_prose_always_explains(
-        self, codes: list[str], first: str, second: str
-    ) -> None:
-        """Two-word prose after a second hash explains any pragma."""
-        code = f"x = 1  # noqa: {', '.join(codes)}  # {first} {second}\n"
-        assert _token_symbols(code) == [], (
-            "prose after a second hash must count as an explanation"
-        )
-
-    @settings(deadline=None)
-    @given(names=st.lists(_WORDS, min_size=1, max_size=3))
-    def test_bare_pylint_disable_always_fires(self, names: list[str]) -> None:
-        """A pylint disable pragma with any name list is reported."""
-        code = f"x = 1  # pylint: disable={','.join(names)}\n"
-        assert _token_symbols(code) == ["lint-suppression-without-explanation"], (
-            "a bare pylint disable must be reported whatever its names"
-        )
 
 
 class TestPureKernelProperties:

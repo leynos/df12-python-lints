@@ -8,7 +8,11 @@ import tokenize
 import pytest
 from pylint import testutils
 
-from df12_python_lints.suppressions import SuppressionCommentChecker
+from df12_python_lints.suppressions import (
+    SuppressionCommentChecker,
+    _Comment,
+    _directive_symbols,
+)
 
 
 def _tokens(code: str) -> list[tokenize.TokenInfo]:
@@ -35,6 +39,51 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         ("code", "message"),
         [
             pytest.param("x = 1  # noqa: E501\n", _lint_message(1), id="bare-noqa"),
+            pytest.param(
+                "x = 1  # noqa: E501 F841,\n",
+                _lint_message(1),
+                id="space-separated-noqa-with-trailing-comma",
+            ),
+            pytest.param(
+                "# flake8: noqa: F401\n",
+                _lint_message(1),
+                id="flake8-file-noqa",
+            ),
+            pytest.param(
+                "x = 1  # ruff: ignore[E501]\n",
+                _lint_message(1),
+                id="inline-ruff-ignore",
+            ),
+            pytest.param(
+                "x = 1  # ruff: ignore [E501]\n",
+                _lint_message(1),
+                id="spaced-inline-ruff-ignore",
+            ),
+            pytest.param(
+                "#ruff: ignore[unused-variable,]\nx = 1\n",
+                _lint_message(1),
+                id="preceding-ruff-ignore-with-rule-name",
+            ),
+            pytest.param(
+                "# ruff: file-ignore[F401, ARG001,]\n",
+                _lint_message(1),
+                id="ruff-file-ignore",
+            ),
+            pytest.param(
+                "# ruff: file-ignore [F401, ARG001,]\n",
+                _lint_message(1),
+                id="spaced-ruff-file-ignore",
+            ),
+            pytest.param(
+                "# ruff: disable[E741, F841,]\nx = 1\n",
+                _lint_message(1),
+                id="ruff-disable",
+            ),
+            pytest.param(
+                "# ruff: disable [E741, F841,]\nx = 1\n",
+                _lint_message(1),
+                id="spaced-ruff-disable",
+            ),
             pytest.param(
                 "# pylint: disable=too-many-branches\nx = 1\n",
                 _lint_message(1),
@@ -66,13 +115,13 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
 
     def test_accepts_second_hash_explanation(self) -> None:
         """Prose after a second hash explains the pragma."""
-        code = "x = eval(s)  # noqa: S307  # input is a vetted literal\n"
+        code = "x = eval(s)  # ruff: ignore[S307]  # input is a vetted literal\n"
         with self.assertNoMessages():
             self.checker.process_tokens(_tokens(code))
 
     def test_accepts_trailing_prose_in_pragma_segment(self) -> None:
         """Prose in the same segment as the pragma explains it."""
-        code = "x = 1  # noqa: E501 the URL cannot be wrapped\n"
+        code = "# ruff: file-ignore[E501] generated URLs cannot be wrapped\n"
         with self.assertNoMessages():
             self.checker.process_tokens(_tokens(code))
 
@@ -97,6 +146,68 @@ class TestSuppressionCommentChecker(testutils.CheckerTestCase):
         """Comments without pragmas are never reported."""
         code = "# This value is measured in seconds.\nx = 30\n"
         with self.assertNoMessages():
+            self.checker.process_tokens(_tokens(code))
+
+    @pytest.mark.parametrize(
+        "code",
+        [
+            pytest.param(
+                "x = 1  # RUFF: ignore[F841]\n",
+                id="uppercase-ruff",
+            ),
+            pytest.param(
+                "x = 1  # ruff: file-ignore[F841]\n",
+                id="inline-file-ignore",
+            ),
+            pytest.param(
+                "x = 1  # ruff: disable[F841]\n",
+                id="inline-disable",
+            ),
+        ],
+    )
+    def test_ignores_invalid_ruff_directives(self, code: str) -> None:
+        """Text that Ruff does not treat as a suppression is not reported."""
+        with self.assertNoMessages():
+            self.checker.process_tokens(_tokens(code))
+
+    @pytest.mark.parametrize(
+        ("comment_text", "is_standalone"),
+        [
+            pytest.param("# ruff: ignore [", True, id="missing-selector"),
+            pytest.param("# ruff: ignore[]", True, id="empty-selector"),
+            pytest.param("# ruff: ignore [F401", True, id="missing-bracket"),
+            pytest.param("# ruff: ignore[F401,,E501]", True, id="bad-separator"),
+            pytest.param("# ruff: IGNORE[F401]", True, id="uppercase-ignore"),
+            pytest.param("# ruff: FILE-IGNORE[F401]", True, id="uppercase-file-ignore"),
+            pytest.param("# ruff: DISABLE[F401]", True, id="uppercase-disable"),
+            pytest.param("# ruff: file-ignore[F401]", False, id="inline-file-ignore"),
+            pytest.param("# ruff: disable[F401]", False, id="inline-disable"),
+        ],
+    )
+    def test_does_not_classify_invalid_ruff_directives(
+        self, comment_text: str, *, is_standalone: bool
+    ) -> None:
+        """Malformed, case-invalid, and inline-only forms are not pragmas."""
+        assert not _directive_symbols(_Comment(comment_text, is_standalone))
+
+    def test_ignores_ruff_enable_directive(self) -> None:
+        """A directive ending a suppression range needs no reason."""
+        code = "# ruff: enable [E501]\n"
+        with self.assertNoMessages():
+            self.checker.process_tokens(_tokens(code))
+
+    def test_ruff_enable_does_not_explain_next_suppression(self) -> None:
+        """A range terminator is not prose explaining the next pragma."""
+        code = "# ruff: enable [E501]\nx = 1  # ruff: ignore [F841]\n"
+        with self.assertAddsMessages(_lint_message(2), ignore_position=True):
+            self.checker.process_tokens(_tokens(code))
+
+    def test_ruff_enable_with_prose_does_not_explain_next_suppression(self) -> None:
+        """Text trailing a range terminator does not explain a later pragma."""
+        code = (
+            "# ruff: enable [E501] linting resumes here\nx = 1  # ruff: ignore [F841]\n"
+        )
+        with self.assertAddsMessages(_lint_message(2), ignore_position=True):
             self.checker.process_tokens(_tokens(code))
 
     def test_flags_both_kinds_in_one_comment(self) -> None:

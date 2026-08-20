@@ -123,19 +123,30 @@ import os.path
 join = os.path.join  # flagged
 ```
 
-Use `from os.path import join` instead, so
-importers and type checkers see a real import binding. Call results, aliases of
-names defined in the same module, and assignments inside functions are not
-flagged.
+Use `from os.path import join` instead, so importers and type checkers see a
+real import binding. Call results, aliases of names defined in the same module,
+and assignments inside functions are not flagged.
 
 ### Suppressions without explanations (C9106, C9107)
 
 Two checkers require every suppression pragma to record a reason:
 
 - `lint-suppression-without-explanation` (C9106) covers lint pragmas:
-  `noqa`, `ruff: noqa`, and `pylint: disable`.
+  `noqa`, `ruff: noqa`, `flake8: noqa`, `ruff: ignore`, `ruff: file-ignore`,
+  the range directive `ruff: disable`, and `pylint: disable`.
 - `typecheck-suppression-without-explanation` (C9107) covers type-check
   pragmas: `type: ignore`, `pyright: ignore`, `ty: ignore`, and `mypy:`.
+
+Bare `noqa`, including inline `noqa` after code, is case-insensitive. The
+`ruff: noqa` and `flake8: noqa` file-level aliases have case-sensitive prefixes
+and must occupy standalone comments. Other Ruff directive keywords are also
+case-sensitive: `ruff: file-ignore`, `ruff: disable`, and `ruff: enable` must
+occupy a standalone comment; only `ruff: ignore` may follow code on the same
+line.
+
+`ruff: enable[...]` ends a suppression range rather than suppressing a
+diagnostic itself. It therefore needs no explanation and does not count as an
+explanation for a suppression on the next line.
 
 An explanation may sit after a second `#` in the same comment, as trailing
 prose in the pragma segment, or as a standalone comment on the line above:
