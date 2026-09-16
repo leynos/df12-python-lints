@@ -9,9 +9,10 @@ USER_BIN_PATH := $(HOME)/.cargo/bin:$(HOME)/.local/bin:$(HOME)/.bun/bin
 TOOLS = $(MDFORMAT_ALL) $(MDLINT)
 VENV_TOOLS = pytest
 UV_ENV = PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
-TYPOS_VERSION ?= 1.48.0
-TYPOS = env $(UV_ENV) $(UV) tool run typos@$(TYPOS_VERSION)
-MD_FILES_FIND = find . -type f -name '*.md' -not -path './.git/*' -print0
+TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.1
+TYPOS_CONFIG_BUILDER = env $(UV_ENV) $(UV) tool run --from \
+	"git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_VERSION)" \
+	typos-config-builder
 WITH_ACT ?= 0
 ACT_TEST_ENV = $(if $(filter 1 true yes on,$(WITH_ACT)),RUN_ACT_VALIDATION=1,)
 PYTEST_XDIST_WORKERS ?= auto
@@ -115,8 +116,7 @@ markdownlint: $(MDLINT) ## Lint Markdown files and spelling
 	+$(MAKE) spelling
 
 spelling: ## Enforce en-GB-oxendict spelling
-	$(UV) run scripts/generate_typos_config.py
-	$(MD_FILES_FIND) | xargs -0 $(TYPOS) --config typos.toml --force-exclude
+	$(TYPOS_CONFIG_BUILDER) gate --repository .
 
 nixie: ## Validate Mermaid diagrams
 	$(call ensure_tool,$(NIXIE))
