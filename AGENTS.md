@@ -166,13 +166,14 @@
 
 ## Markdown guidance
 
-- Validate Markdown files using `make markdownlint`. This also runs the pinned
+- Validate Markdown files using `make markdownlint`. This also runs the
   en-GB-oxendict spelling gate.
-- The spelling configuration `typos.toml` is generated. Generic Oxford stems
-  belong in the shared base in `leynos/agent-helper-scripts`; project-specific
-  accepted words, patterns, and exclusions belong in `typos.local.toml`.
-  Regenerate with `uv run scripts/generate_typos_config.py` rather than editing
-  `typos.toml` by hand.
+- Enforce spelling with `make spelling`. It regenerates `typos.toml` from the
+  live shared dictionary and the `typos.local.toml` overlay on every run, so
+  `typos.toml` is never drift checked in CI. Generic Oxford stems belong in the
+  shared dictionary in `leynos/agent-helper-scripts`; narrow project-specific
+  accepted words, patterns, and exclusions belong in `typos.local.toml`. Never
+  edit `typos.toml` by hand.
 - Run `make fmt` after documentation changes to format Markdown and fix table
   markup.
 - Validate Mermaid diagrams in Markdown by running `make nixie`.

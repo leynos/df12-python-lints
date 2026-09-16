@@ -367,8 +367,8 @@ these targets in order:
 - `lint`: run `lint-python` and, when Rust is enabled, `lint-rust`.
 - `typecheck`: run `ty check`.
 - `test`: run pytest and, when Rust is enabled, Rust tests.
-- `spelling`: generate shared en-GB-oxendict policy and check Markdown with the
-  pinned `typos` version.
+- `spelling`: check Markdown against the shared en-GB-oxendict dictionary using
+  the shared spelling gate.
 - `audit`: run `pip-audit` and, when Rust is enabled, `cargo audit`.
 
 The `lint-python` target runs Ruff, then Interrogate with
@@ -377,9 +377,11 @@ coverage for the Python targets, then Pylint via a PyPy-backed runner. The
 Pylint runner is installed through `uv tool run` from the pinned
 `pylint-pypy-shim` repository.
 
-The spelling target keeps an ignored shared-base cache and a tracked generated
-`typos.toml`. Run `make spelling` directly when updating documentation; a
-populated cache remains usable when the shared source is temporarily offline.
+The spelling target regenerates the tracked `typos.toml` from the live shared
+dictionary and the `typos.local.toml` overlay on every run, so `typos.toml` is
+never drift checked in CI. Run `make spelling` directly when updating
+documentation, and record narrow project-specific exceptions in
+`typos.local.toml`.
 
 Pytest discovery is limited to the top-level `tests/` tree. Keep generated
 project unit tests there rather than in package module directories or

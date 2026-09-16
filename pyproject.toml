@@ -15,6 +15,7 @@ dev = [
     "pytest",
     "interrogate",
     "pip-audit",
+    "pip>=26.2",  # PYSEC-2026-3721 in the environment pip; audited by pip-audit
     "ruff",
     "pyright",
     "ty",
