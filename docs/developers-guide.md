@@ -206,6 +206,14 @@ actions under `.github/`.
   to the shared coverage action. When the Rust extension is enabled, it also
   sets up Rust, installs Rust lint and test tools, and passes
   `rust_extension/Cargo.toml` to coverage.
+- Both coverage steps, in `ci.yml` and in `coverage-main.yml`, set
+  `UV_PYTHON` to the version their job's `setup-python` step installs. The
+  shared coverage action creates its venv with a bare `uv venv`, which would
+  otherwise take whatever interpreter the latest uv discovers first, so pull
+  requests and main could measure on different Pythons and the ratchet would
+  compare unlike figures. `tests/test_coverage_interpreter.py` holds the two
+  lanes to one pinned interpreter; it reads the workflows with PyYAML, which is
+  a locked dev dependency for that reason.
 - `.github/workflows/audit.yml` runs `make audit` against the default branch
   weekly as the compensating control for the Dependabot CI bypass.
 - `.github/workflows/act-validation.yml` runs rendered workflow validation in a
