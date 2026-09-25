@@ -73,7 +73,7 @@ jobs:
       # does not check the ref itself.
       - name: Upload coverage data to CodeScene
         if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@438ad8a99a3580e753189c47391a1652c5f46ed4
         with:
           format: cobertura
           path: coverage.xml
