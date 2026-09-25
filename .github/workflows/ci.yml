@@ -67,7 +67,7 @@ jobs:
       # the work and the CodeScene upload for the same commit.
       - name: Test and Measure Coverage
         if: ${{ github.event_name == 'pull_request' }}
-        uses: leynos/shared-actions/.github/actions/generate-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
+        uses: leynos/shared-actions/.github/actions/generate-coverage@438ad8a99a3580e753189c47391a1652c5f46ed4
         # Pin the coverage venv's interpreter to the one setup-python installs.
         # The shared action creates `.venv-coverage` with a bare `uv venv`,
         # which takes whatever interpreter uv discovers first, and uv 0.12.19
