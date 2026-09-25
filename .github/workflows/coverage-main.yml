@@ -24,7 +24,6 @@ jobs:
     permissions:
       contents: read
     env:
-      CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN || '' }}
       CODESCENE_CLI_SHA256: ${{ vars.CODESCENE_CLI_SHA256 || '' }}
       
     steps:
@@ -59,11 +58,24 @@ jobs:
           with-ratchet: 'true'
           
 
+      # Publishes whether the token exists, and nothing else. The token is in
+      # no `env` on this workflow: the upload is a composite action whose
+      # nested steps inherit the calling step's `env`. GitHub evaluates the
+      # expression before it sends the command to the runner, so this shell
+      # receives only `true` or `false`; the upload alone receives the token,
+      # as its input.
+      - name: Check CodeScene token availability
+        id: codescene_token
+        run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+      # The ref guard is not redundant with the push branch filter: a
+      # dispatch runs from whichever branch started it, and the upload action
+      # does not check the ref itself.
       - name: Upload coverage data to CodeScene
-        if: env.CS_ACCESS_TOKEN != ''
+        if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
         with:
           format: cobertura
           path: coverage.xml
-          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          access-token: ${{ secrets.CS_ACCESS_TOKEN }}
           installer-checksum: ${{ env.CODESCENE_CLI_SHA256 }}
