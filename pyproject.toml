@@ -23,6 +23,7 @@ dev = [
     "pytest-xdist",
     "hypothesis>=6",
     "crosshair-tool",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.ruff]

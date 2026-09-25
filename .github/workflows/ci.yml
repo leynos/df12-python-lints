@@ -68,6 +68,14 @@ jobs:
       - name: Test and Measure Coverage
         if: ${{ github.event_name == 'pull_request' }}
         uses: leynos/shared-actions/.github/actions/generate-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
+        # Pin the coverage venv's interpreter to the one setup-python installs.
+        # The shared action creates `.venv-coverage` with a bare `uv venv`,
+        # which takes whatever interpreter uv discovers first, and uv 0.12.19
+        # began picking 3.14: pull requests then measured on 3.14 against a
+        # baseline main measured on 3.13, and the ratchet failed on no change.
+        # Keep in step with the other coverage lane; a contract holds the two.
+        env:
+          UV_PYTHON: '3.13'
         with:
           output-path: coverage.xml
           format: cobertura
