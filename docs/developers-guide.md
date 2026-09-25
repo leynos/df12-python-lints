@@ -226,6 +226,16 @@ actions under `.github/`.
 - `.github/workflows/build-wheels.yml` is a reusable workflow for extension
   builds. It accepts a Python version and builds wheels across Linux, Windows,
   and macOS architectures via `.github/actions/build-wheels`.
+- `.github/workflows/coverage-main.yml` runs on pushes to `main` and on
+  dispatch, and is the only CodeScene caller. A
+  `Check CodeScene token availability` step (id `codescene_token`) runs exactly
+  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`,
+  with no `if:` and no `env`. The upload runs only when that output is `true`
+  and `github.ref` is `refs/heads/main`, and takes the token as its
+  `access-token` input, so no `env` holds it: the upload is a composite action
+  whose nested steps inherit the calling step's `env`.
+  `tests/test_codescene_publisher.py` holds the shape and requires the token to
+  be named exactly at the check's command and the upload's input.
 - `.github/workflows/get-codescene-sha.yml` is manually dispatched. It fetches
   the CodeScene coverage CLI installer, computes its SHA-256 digest, and writes
   the result to the `CODESCENE_CLI_SHA256` repository variable.
