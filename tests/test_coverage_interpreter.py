@@ -16,7 +16,7 @@ import typing as typ
 import pytest
 import yaml
 
-type Mapping = dict[str, typ.Any]
+type Mapping = dict[str, object]
 
 WORKFLOWS = pathlib.Path(__file__).resolve().parents[1] / ".github/workflows"
 #: Each coverage lane, by workflow file and job.
@@ -37,7 +37,7 @@ def _steps(workflow: str, job: str) -> list[Mapping]:
     pytest.fail(f"{workflow} must declare {job} with a steps list")
 
 
-def _is_mapping(value: object) -> bool:
+def _is_mapping(value: object) -> typ.TypeGuard[Mapping]:
     """Report whether a parsed YAML value is a mapping."""
     match value:
         case dict():
@@ -53,14 +53,21 @@ def _one(steps: list[Mapping], action: str) -> Mapping:
     return found[0]
 
 
+def _entry(step: Mapping, block: str, key: str) -> str:
+    """Return ``step[block][key]`` as text, or an empty string when absent."""
+    match step.get(block):
+        case {**entries} if key in entries:
+            return str(entries[key])
+        case _:
+            return ""
+
+
 def _pinned_interpreter(workflow: str, job: str) -> tuple[str, str]:
     """Return the coverage step's ``UV_PYTHON`` and the job's Python version."""
     steps = _steps(workflow, job)
     coverage = _one(steps, "leynos/shared-actions/.github/actions/generate-coverage")
     setup = _one(steps, "actions/setup-python")
-    pinned = str((coverage.get("env") or {}).get("UV_PYTHON", ""))
-    installed = str((setup.get("with") or {}).get("python-version", ""))
-    return pinned, installed
+    return _entry(coverage, "env", "UV_PYTHON"), _entry(setup, "with", "python-version")
 
 
 @pytest.mark.parametrize(("workflow", "job"), LANES)
