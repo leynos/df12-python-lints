@@ -373,9 +373,10 @@ these targets in order:
 
 The `lint-python` target runs Ruff, then Interrogate with
 `interrogate --fail-under 100 $(PYTHON_TARGETS)` to enforce 100% docstring
-coverage for the Python targets, then Pylint via a PyPy-backed runner. The
-Pylint runner is installed through `uv tool run` from the pinned
-`pylint-pypy-shim` repository.
+coverage for the Python targets, then a pinned Pylint (`PYLINT_VERSION`) on
+uv-managed PyPy 3.12 (`PYLINT_PYTHON`), installed through `uv tool run`.
+`syntax-error` stays enabled, so a module that PyPy cannot parse fails the lint
+rather than being skipped.
 
 The spelling target regenerates the tracked `typos.toml` from the live shared
 dictionary and the `typos.local.toml` overlay on every run, so `typos.toml` is

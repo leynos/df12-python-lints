@@ -281,9 +281,9 @@ The test suite is layered, so each verification tier runs at the right cadence:
   treats a "Not confirmed" verdict as a failure; the bounds scope the proof
   only, while the Hypothesis tier covers the unbounded runtime domain. The gate
   is opt-in; run it on changes to the kernels rather than on every push.
-- **End-to-end shim tests** (part of `make test`,
-  `tests/test_e2e_shim.py`) lint fixture modules through the pinned
-  `leynos/pylint-pypy-shim` runner with the plugin loaded, proving every
-  checker fires — and stays silent on clean code — under the same PyPy-backed
-  pylint that the project's own lint gate uses. The shim ref is read from the
-  Makefile so the two cannot drift apart.
+- **End-to-end PyPy tests** (part of `make test`, `tests/test_e2e_pypy.py`)
+  lint fixture modules with the pinned Pylint on managed PyPy and the plugin
+  loaded, proving every checker fires — and stays silent on clean code — under
+  the same PyPy-backed Pylint that the project's own lint gate uses.
+  `PYLINT_PYTHON` and `PYLINT_VERSION` are read from the Makefile so the two
+  cannot drift apart.
