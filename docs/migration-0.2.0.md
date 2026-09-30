@@ -1,9 +1,9 @@
 # Migrate to version 0.2.0
 
-Version 0.2.0 adds a rule for closed standard-library dataclasses and
-reassigns the message identifier previously allocated to
-`prefer-type-statement`. Projects that configure pylint messages by identifier
-must update that configuration when upgrading from version 0.1.0.
+Version 0.2.0 adds a rule for closed standard-library dataclasses and reassigns
+the message identifier previously allocated to `prefer-type-statement`.
+Projects that configure pylint messages by identifier must update that
+configuration when upgrading from version 0.1.0.
 
 ## Adopt the dataclass-slots rule
 
@@ -39,8 +39,8 @@ class LegacyRecord:
 ## Update message identifiers
 
 In version 0.1.0, R9111 identified `prefer-type-statement`. Version 0.2.0
-assigns R9111 to `prefer-slots-for-dataclass` and moves
-`prefer-type-statement` to R9112.
+assigns R9111 to `prefer-slots-for-dataclass` and moves `prefer-type-statement`
+to R9112.
 
 Replace R9111 with R9112 wherever a pylint `enable` or `disable` list intends
 to select `prefer-type-statement`. For example:
