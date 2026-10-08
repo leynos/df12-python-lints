@@ -37,11 +37,15 @@ jobs:
           act_url="https://github.com/nektos/act/releases/download/${ACT_VERSION}/${act_archive}"
           curl -fsSLo "${act_archive}" "${act_url}"
           act_sha256="$(
-            curl -fsSL "https://api.github.com/repos/nektos/act/releases/tags/${ACT_VERSION}" |
+            curl -fsSL --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/nektos/act/releases/tags/${ACT_VERSION}" |
               python -c 'import json, sys; release = json.load(sys.stdin); print(next(asset["digest"].split(":", 1)[1] for asset in release["assets"] if asset["name"] == "act_Linux_x86_64.tar.gz"))'
           )"
           printf '%s  %s\n' "${act_sha256}" "${act_archive}" | sha256sum -c -
           sudo tar -xzf "${act_archive}" -C /usr/local/bin act
+
+      - name: Install documentation tooling
+        run: |
           uv tool install "mbake==${MBAKE_VERSION}"
 
       - name: Check Docker runtime
