@@ -261,6 +261,10 @@ live, `typos.toml` is never drift checked in continuous integration. Add only
 narrow project-specific terms and exclusions to `typos.local.toml`; never edit
 generated `typos.toml` by hand.
 
+`TYPOS_CONFIG_BUILDER_VERSION` in the `Makefile` pins the
+`typos-config-builder` release the gate runs (currently `v0.1.3`). Raise it
+together with the regenerated `typos.toml`, never on its own.
+
 ## Verification tiers
 
 The test suite is layered, so each verification tier runs at the right cadence:
