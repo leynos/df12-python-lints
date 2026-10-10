@@ -382,7 +382,9 @@ The spelling target regenerates the tracked `typos.toml` from the live shared
 dictionary and the `typos.local.toml` overlay on every run, so `typos.toml` is
 never drift checked in CI. Run `make spelling` directly when updating
 documentation, and record narrow project-specific exceptions in
-`typos.local.toml`.
+`typos.local.toml`. The spelling gate itself needs Python 3.14 or newer: the
+target passes `--python 3.14` to `uv`, which fetches that interpreter when the
+host lacks one, independently of the Python version the project under test uses.
 
 Pytest discovery is limited to the top-level `tests/` tree. Keep generated
 project unit tests there rather than in package module directories or
