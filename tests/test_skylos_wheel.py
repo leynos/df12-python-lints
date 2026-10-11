@@ -75,7 +75,9 @@ class TestInstalledWheel:
         (repo / "pkg" / "core.py").write_text(_DEAD, encoding="utf-8")
         blocked = df12("check")
         assert blocked.returncode == 1, blocked.stdout + blocked.stderr
-        assert "never_called" in blocked.stdout
+        assert "never_called" in blocked.stdout, (
+            "expected: 'never_called' in blocked.stdout"
+        )
         allowed = df12("allow", "--symbol", "never_called", "--reason", "why")
         assert allowed.returncode == 0, allowed.stdout + allowed.stderr
         excused = df12("check")
@@ -110,8 +112,12 @@ class TestInstalledWheel:
         assert valid.returncode == 0, "validation needs no backend"
         checked = run([command, "check", *target], cwd=outside)
         assert checked.returncode == 2, checked.stdout + checked.stderr
-        assert "skylos is not installed" in checked.stderr
-        assert "Traceback" not in checked.stderr
+        assert "skylos is not installed" in checked.stderr, (
+            "expected: 'skylos is not installed' in checked.stderr"
+        )
+        assert "Traceback" not in checked.stderr, (
+            "expected: 'Traceback' not in checked.stderr"
+        )
 
     def test_an_unsuitable_interpreter_is_refused(
         self, tmp_path: pathlib.Path, wheel: pathlib.Path, python: str
@@ -130,4 +136,6 @@ class TestInstalledWheel:
             cwd=_outside(tmp_path),
         )
         assert result.returncode == 2, result.stdout + result.stderr
-        assert "requires 3.99 or newer" in result.stderr
+        assert "requires 3.99 or newer" in result.stderr, (
+            "expected: 'requires 3.99 or newer' in result.stderr"
+        )

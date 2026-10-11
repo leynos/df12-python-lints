@@ -1,0 +1,3 @@
+subprocess program=n exit_status=0 elapsed_seconds=<t>
+operation=check failure category=ToolExecutionError
+operation=check outcome=error exit_status=2 elapsed_seconds=<t>

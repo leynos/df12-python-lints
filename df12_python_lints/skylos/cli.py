@@ -134,18 +134,14 @@ def _dispatch(
 ) -> int:
     """Run the selected operation and log its outcome."""
     if args.command == "check":
-        return observe(
-            "check", context.repository, lambda: commands.run_check(context, streams)
-        )
+        return observe("check", lambda: commands.run_check(context, streams))
     if args.command == "validate-config":
         return observe(
             "validate-config",
-            context.repository,
             lambda: commands.run_validate_config(context, streams),
         )
     return observe(
         "allow",
-        context.repository,
         lambda: commands.run_allow(
             context, symbol=args.symbol, reason=args.reason, streams=streams
         ),

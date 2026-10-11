@@ -74,7 +74,9 @@ class TestPlatformSelection:
     )
     def test_supported_targets(self, host: install.HostPlatform, target: str) -> None:
         """Each supported host maps to its upstream triple."""
-        assert install.platform_target(host) == target
+        assert install.platform_target(host) == target, (
+            "expected: install.platform_target(host) == target"
+        )
 
     @pytest.mark.parametrize(
         ("host", "fragment"),
@@ -104,7 +106,7 @@ class TestManifest:
             "aarch64-unknown-linux-gnu",
             "x86_64-apple-darwin",
             "x86_64-unknown-linux-gnu",
-        ]
+        ], "expected: sorted(digests) == [ 'aarch64-apple-darwin', 'aarch64-unknown..."
 
     def test_unknown_or_floating_versions_are_rejected(self) -> None:
         """There is no 'latest' and no unreviewed release."""
@@ -118,6 +120,8 @@ class TestManifest:
         assert install.release_url(PINNED, "x86_64-apple-darwin") == (
             "https://github.com/corca-ai/nose/releases/download/v0.20.0/"
             "nose-cli-x86_64-apple-darwin.tar.xz"
+        ), (
+            "expected: install.release_url(PINNED, 'x86_64-apple-darwin') == ( 'https://gi..."
         )
 
     @pytest.mark.parametrize(
@@ -148,7 +152,9 @@ class TestArchiveVerification:
     def test_good_archive_yields_the_executable(self) -> None:
         """A matching digest returns the single ``nose`` payload."""
         data = _good()
-        assert install.verified_executable(data, expected_sha256=_sha(data)) == _SCRIPT
+        assert (
+            install.verified_executable(data, expected_sha256=_sha(data)) == _SCRIPT
+        ), "expected: install.verified_executable(data, expected_sha256=_sha(data))..."
 
     def test_digest_mismatch_is_rejected_before_reading_the_archive(self) -> None:
         """A tampered archive never reaches extraction."""
@@ -221,7 +227,9 @@ class TestInstallation:
         )
         assert target == context.default_binary, "installed at the local path"
         assert target.stat().st_mode & 0o777 == 0o755, "installed executable"
-        assert urls == [install.release_url(PINNED, "x86_64-unknown-linux-gnu")]
+        assert urls == [install.release_url(PINNED, "x86_64-unknown-linux-gnu")], (
+            "expected: urls == [install.release_url(PINNED, 'x86_64-unknown-linux-gn..."
+        )
         leftovers = [p.name for p in target.parent.iterdir()]
         assert leftovers == ["nose"], f"no temporary file may remain: {leftovers}"
 
@@ -235,7 +243,9 @@ class TestInstallation:
         install.install_detector(context, version=PINNED, boundary=boundary)
         install.install_detector(context, version=PINNED, boundary=boundary)
         assert len(urls) == 1, "the second run must not download"
-        assert any("already installed" in line for line in lines)
+        assert any("already installed" in line for line in lines), (
+            "expected: any('already installed' in line for line in lines)"
+        )
 
     def test_payload_reporting_the_wrong_version_is_never_installed(
         self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -263,7 +273,9 @@ class TestInstallation:
                 version=PINNED,
                 boundary=self._boundary(_good() + b"x", urls, lines),
             )
-        assert not context.default_binary.exists()
+        assert not context.default_binary.exists(), (
+            "expected: not context.default_binary.exists()"
+        )
 
     def test_explicit_binary_override_is_the_destination(
         self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -282,7 +294,9 @@ class TestInstallation:
         target = install.install_detector(
             context, version=PINNED, boundary=self._boundary(archive, [], [])
         )
-        assert target == repo.resolve() / "vendor" / "nose"
+        assert target == repo.resolve() / "vendor" / "nose", (
+            "expected: target == repo.resolve() / 'vendor' / 'nose'"
+        )
 
     def test_host_without_an_approved_asset_fails_before_downloading(
         self, tmp_path: pathlib.Path
@@ -337,8 +351,12 @@ class TestInstallation:
             _LINUX, downloader=lambda _u: b"", output=print
         )
         streams = Streams(__import__("sys").stdout, __import__("sys").stderr)
-        assert run_install(context, boundary=boundary, streams=streams) == 2
-        assert "no approved release digests" in capsys.readouterr().err
+        assert run_install(context, boundary=boundary, streams=streams) == 2, (
+            "expected: run_install(context, boundary=boundary, streams=streams) == 2"
+        )
+        assert "no approved release digests" in capsys.readouterr().err, (
+            "expected: 'no approved release digests' in capsys.readouterr().err"
+        )
 
 
 def test_a_staging_write_failure_is_a_tool_error(
@@ -386,7 +404,11 @@ def test_a_scratch_directory_failure_makes_install_exit_two(
         _LINUX, downloader=lambda _url: archive, output=lambda _m: None
     )
     streams = Streams(sys.stdout, sys.stderr)
-    assert run_install(context, boundary=boundary, streams=streams) == 2
+    assert run_install(context, boundary=boundary, streams=streams) == 2, (
+        "expected: run_install(context, boundary=boundary, streams=streams) == 2"
+    )
     err = capsys.readouterr().err
-    assert "cannot create the scratch directory" in err
-    assert "Traceback" not in err
+    assert "cannot create the scratch directory" in err, (
+        "expected: 'cannot create the scratch directory' in err"
+    )
+    assert "Traceback" not in err, "expected: 'Traceback' not in err"

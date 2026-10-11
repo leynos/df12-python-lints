@@ -62,11 +62,11 @@ class TestTransaction:
         assert (
             _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
             is True
-        )
+        ), "expected: _manifest.edit_manifest(manifest, _set_key('a'), extra='dupli..."
         assert (
             tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]["probe"]["a"]
             is True
-        )
+        ), "expected: tomllib.loads(manifest.read_text(encoding='utf-8'))['tool']['..."
 
     def test_no_change_writes_nothing(self, tmp_path: pathlib.Path) -> None:
         """An edit that reports no change leaves the file untouched."""
@@ -75,7 +75,7 @@ class TestTransaction:
         assert (
             _manifest.edit_manifest(manifest, lambda _d: False, extra="duplication")
             is False
-        )
+        ), "expected: _manifest.edit_manifest(manifest, lambda _d: False, extra='du..."
         assert manifest.stat().st_mtime_ns == before, "no rewrite for a no-op"
 
     def test_rejecting_edit_leaves_the_manifest_intact(
@@ -92,7 +92,9 @@ class TestTransaction:
 
         with pytest.raises(ToolConfigError, match="nope"):
             _manifest.edit_manifest(manifest, reject, extra="duplication")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
     def test_invalid_toml_is_a_configuration_error(
         self, tmp_path: pathlib.Path
@@ -101,7 +103,9 @@ class TestTransaction:
         manifest = _write_manifest(tmp_path, "[broken\n")
         with pytest.raises(ToolConfigError, match="cannot parse"):
             _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
-        assert manifest.read_text(encoding="utf-8") == "[broken\n"
+        assert manifest.read_text(encoding="utf-8") == "[broken\n", (
+            "expected: manifest.read_text(encoding='utf-8') == '[broken'n'"
+        )
 
     def test_missing_manifest_is_a_configuration_error(
         self, tmp_path: pathlib.Path
@@ -192,7 +196,9 @@ class TestLockIdentity:
         monkeypatch.setitem(sys.modules, "fcntl", None)
         with pytest.raises(ToolPlatformError, match="POSIX advisory locks"):
             _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
 
 class TestFailureModes:
@@ -213,7 +219,9 @@ class TestFailureModes:
         with pytest.raises(OSError, match="no space"):
             atomic_replace(target, b"replacement")
         monkeypatch.undo()
-        assert target.read_text(encoding="utf-8") == "original"
+        assert target.read_text(encoding="utf-8") == "original", (
+            "expected: target.read_text(encoding='utf-8') == 'original'"
+        )
         assert [p.name for p in tmp_path.iterdir()] == ["f"], "no temporary file"
 
     @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
@@ -246,7 +254,9 @@ class TestFailureModes:
         before = manifest.read_bytes()
         with pytest.raises(ToolExecutionError, match="cannot lock"):
             _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
 
 class TestAtomicReplace:
@@ -347,8 +357,12 @@ class TestTransactionEdges:
 
         monkeypatch.setattr(fcntl, "flock", flaky)
         manifest = _write_manifest(tmp_path)
-        assert _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
-        assert "a = true" in manifest.read_text(encoding="utf-8")
+        assert _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication"), (
+            "expected: _manifest.edit_manifest(manifest, _set_key('a'), extra='dupli..."
+        )
+        assert "a = true" in manifest.read_text(encoding="utf-8"), (
+            "expected: 'a = true' in manifest.read_text(encoding='utf-8')"
+        )
 
     def test_a_directory_fsync_failure_leaves_the_new_content_in_place(
         self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch

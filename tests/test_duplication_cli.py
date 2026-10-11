@@ -37,7 +37,9 @@ class TestCheck:
         code = check_scenario(tmp_path, report())
         out = capsys.readouterr().out
         assert code == 0, out
-        assert "duplication gate passed (nose 0.20.0)" in out
+        assert "duplication gate passed (nose 0.20.0)" in out, (
+            "expected: 'duplication gate passed (nose 0.20.0)' in out"
+        )
 
     def test_blocking_family_exits_one_with_actionable_report(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
@@ -48,8 +50,10 @@ class TestCheck:
         assert code == 1, out
         assert (
             "src/a.py:1-20 parse ~ src/b.py:1-20 parse (copy-paste, value 22.1)" in out
+        ), "expected: 'src/a.py:1-20 parse ~ src/b.py:1-20 parse (copy-paste, value..."
+        assert "df12-duplication allow --member" in out, (
+            "expected: 'df12-duplication allow --member' in out"
         )
-        assert "df12-duplication allow --member" in out
 
     def test_allowed_pair_passes_and_third_copy_blocks(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
@@ -62,12 +66,14 @@ class TestCheck:
         )
         assert (
             check_scenario(tmp_path / "one", report(family(_A, _B)), extra=extra) == 0
+        ), "expected: check_scenario(tmp_path / 'one', report(family(_A, _B)), extr..."
+        assert "1 allowed by reasoned exceptions" in capsys.readouterr().out, (
+            "expected: '1 allowed by reasoned exceptions' in capsys.readouterr().out"
         )
-        assert "1 allowed by reasoned exceptions" in capsys.readouterr().out
         assert (
             check_scenario(tmp_path / "two", report(family(_A, _B, _C)), extra=extra)
             == 1
-        )
+        ), "expected: check_scenario(tmp_path / 'two', report(family(_A, _B, _C)),..."
         assert "src/c.py" in capsys.readouterr().out, "the grown family blocks"
 
     def test_unmatched_entry_is_explained_without_claiming_the_duplication_is_gone(
@@ -75,21 +81,33 @@ class TestCheck:
     ) -> None:
         """The diagnostic names ranking and budget, and never says it is gone."""
         extra = '[[tool.duplication_gate.allow]]\nunit = "src/z.py"\nreason = "old"\n'
-        assert check_scenario(tmp_path, report(), extra=extra) == 0
+        assert check_scenario(tmp_path, report(), extra=extra) == 0, (
+            "expected: check_scenario(tmp_path, report(), extra=extra) == 0"
+        )
         err = capsys.readouterr().err
-        assert "unmatched in this scan" in err
-        assert "ranking" in err
-        assert "duplication is gone" not in err
-        assert "not removed automatically" in err
+        assert "unmatched in this scan" in err, (
+            "expected: 'unmatched in this scan' in err"
+        )
+        assert "ranking" in err, "expected: 'ranking' in err"
+        assert "duplication is gone" not in err, (
+            "expected: 'duplication is gone' not in err"
+        )
+        assert "not removed automatically" in err, (
+            "expected: 'not removed automatically' in err"
+        )
 
     def test_budget_saturation_is_reported(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """A capped report says how many families went unenforced."""
-        assert check_scenario(tmp_path, report(family(_A, _B), total=40)) == 1
+        assert check_scenario(tmp_path, report(family(_A, _B), total=40)) == 1, (
+            "expected: check_scenario(tmp_path, report(family(_A, _B), total=40)) == 1"
+        )
         err = capsys.readouterr().err
-        assert "returned 1 of 40 families" in err
-        assert "tool.nose.top" in err
+        assert "returned 1 of 40 families" in err, (
+            "expected: 'returned 1 of 40 families' in err"
+        )
+        assert "tool.nose.top" in err, "expected: 'tool.nose.top' in err"
 
     @pytest.mark.parametrize(
         ("kwargs", "fragment"),
@@ -118,16 +136,22 @@ class TestCheck:
         code = cli.main(["check", "--repository", str(repo), "--binary", "n"])
         err = capsys.readouterr().err
         assert code == 2, err
-        assert fragment in err
-        assert "Traceback" not in err
+        assert fragment in err, "expected: fragment in err"
+        assert "Traceback" not in err, "expected: 'Traceback' not in err"
 
     def test_missing_repository_and_pyproject_exit_two(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """A bad --repository is an invocation error."""
-        assert cli.main(["check", "--repository", str(tmp_path / "nope")]) == 2
-        assert cli.main(["check", "--repository", str(tmp_path)]) == 2
-        assert "pyproject.toml" in capsys.readouterr().err
+        assert cli.main(["check", "--repository", str(tmp_path / "nope")]) == 2, (
+            "expected: cli.main(['check', '--repository', str(tmp_path / 'nope')]) == 2"
+        )
+        assert cli.main(["check", "--repository", str(tmp_path)]) == 2, (
+            "expected: cli.main(['check', '--repository', str(tmp_path)]) == 2"
+        )
+        assert "pyproject.toml" in capsys.readouterr().err, (
+            "expected: 'pyproject.toml' in capsys.readouterr().err"
+        )
 
     def test_defaults_to_the_invocation_directory(
         self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -136,7 +160,9 @@ class TestCheck:
         repo = make_repository(tmp_path / "repo")
         write_fake_nose(repo / "n", Script(stdout=report()))
         monkeypatch.chdir(repo)
-        assert cli.main(["check", "--binary", "n"]) == 0
+        assert cli.main(["check", "--binary", "n"]) == 0, (
+            "expected: cli.main(['check', '--binary', 'n']) == 0"
+        )
 
     def test_does_not_import_an_unrelated_scripts_package_or_change_cwd(
         self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -152,7 +178,9 @@ class TestCheck:
         write_fake_nose(repo / "n", Script(stdout=report()))
         before = str(tmp_path)
         monkeypatch.chdir(tmp_path)
-        assert cli.main(["check", "--repository", str(repo), "--binary", "n"]) == 0
+        assert cli.main(["check", "--repository", str(repo), "--binary", "n"]) == 0, (
+            "expected: cli.main(['check', '--repository', str(repo), '--binary', 'n'..."
+        )
         assert str(__import__("pathlib").Path.cwd()) == before, "cwd must not change"
         assert "scripts" not in sys.modules, "the decoy package must not be imported"
 
@@ -190,7 +218,7 @@ class TestAllow:
             "src/a.py::parse",
             "src/b.py::parse",
             "src/c.py::parse",
-        ]
+        ], "expected: entry['members'] == [ 'src/a.py::parse', 'src/b.py::parse', '..."
 
     def test_first_and_second_aliases_still_work(self, tmp_path: pathlib.Path) -> None:
         """The legacy --first/--second spelling maps onto members."""
@@ -206,12 +234,12 @@ class TestAllow:
             "--reason",
             "legacy spelling",
         ])
-        assert code == 0
+        assert code == 0, "expected: code == 0"
         data = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))
         assert data["tool"]["duplication_gate"]["allow"][0]["members"] == [
             "src/a.py",
             "src/b.py",
-        ]
+        ], "expected: data['tool']['duplication_gate']['allow'][0]['members'] == [..."
 
     def test_arguments_with_spaces_unicode_and_shell_text_are_preserved(
         self, tmp_path: pathlib.Path
@@ -230,11 +258,13 @@ class TestAllow:
                 reason,
             ])
             == 0
-        )
+        ), "expected: cli.main([ 'allow', '--repository', str(repo), '--member', 's..."
         entry = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))[
             "tool"
         ]["duplication_gate"]["allow"][0]
-        assert entry == {"unit": "src/my file.py::f g", "reason": reason}
+        assert entry == {"unit": "src/my file.py::f g", "reason": reason}, (
+            "expected: entry == {'unit': 'src/my file.py::f g', 'reason': reason}"
+        )
 
     @pytest.mark.parametrize(
         "args",
@@ -254,9 +284,15 @@ class TestAllow:
         """Invalid input is rejected before the manifest is touched."""
         repo = self._repo(tmp_path)
         before = (repo / "pyproject.toml").read_bytes()
-        assert cli.main(["allow", "--repository", str(repo), *args]) == 2
-        assert (repo / "pyproject.toml").read_bytes() == before
-        assert "configuration error" in capsys.readouterr().err
+        assert cli.main(["allow", "--repository", str(repo), *args]) == 2, (
+            "expected: cli.main(['allow', '--repository', str(repo), *args]) == 2"
+        )
+        assert (repo / "pyproject.toml").read_bytes() == before, (
+            "expected: (repo / 'pyproject.toml').read_bytes() == before"
+        )
+        assert "configuration error" in capsys.readouterr().err, (
+            "expected: 'configuration error' in capsys.readouterr().err"
+        )
 
     def test_reason_is_required_by_the_parser(self, tmp_path: pathlib.Path) -> None:
         """Argparse rejects a missing --reason with its usage exit status."""
@@ -268,7 +304,7 @@ class TestAllow:
                 "--member",
                 "a.py",
             ])
-        assert raised.value.code == 2
+        assert raised.value.code == 2, "expected: raised.value.code == 2"
 
 
 class TestEntryPoint:
@@ -278,15 +314,19 @@ class TestEntryPoint:
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """``--version`` reports the installed distribution."""
-        assert cli.main(["--version"]) == 0
-        assert capsys.readouterr().out.startswith("df12-duplication ")
+        assert cli.main(["--version"]) == 0, "expected: cli.main(['--version']) == 0"
+        assert capsys.readouterr().out.startswith("df12-duplication "), (
+            "expected: capsys.readouterr().out.startswith('df12-duplication ')"
+        )
 
     def test_no_subcommand_is_an_invocation_error(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """A bare invocation prints usage and exits two."""
-        assert cli.main([]) == 2
-        assert "usage" in capsys.readouterr().err
+        assert cli.main([]) == 2, "expected: cli.main([]) == 2"
+        assert "usage" in capsys.readouterr().err, (
+            "expected: 'usage' in capsys.readouterr().err"
+        )
 
     def test_help_lists_every_operation(
         self, capsys: pytest.CaptureFixture[str]
@@ -294,6 +334,8 @@ class TestEntryPoint:
         """``--help`` documents check, allow and install."""
         with pytest.raises(SystemExit) as raised:
             cli.main(["--help"])
-        assert raised.value.code == 0
+        assert raised.value.code == 0, "expected: raised.value.code == 0"
         out = capsys.readouterr().out
-        assert all(word in out for word in ("check", "allow", "install"))
+        assert all(word in out for word in ("check", "allow", "install")), (
+            "expected: all(word in out for word in ('check', 'allow', 'install'))"
+        )

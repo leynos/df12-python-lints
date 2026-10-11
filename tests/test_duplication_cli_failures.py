@@ -41,8 +41,10 @@ class TestSaturation:
         )
         assert (
             check_scenario(tmp_path, report(family(_A, _B), total=40), extra=extra) == 2
+        ), "expected: check_scenario(tmp_path, report(family(_A, _B), total=40), ex..."
+        assert "cannot prove a clean scan" in capsys.readouterr().err, (
+            "expected: 'cannot prove a clean scan' in capsys.readouterr().err"
         )
-        assert "cannot prove a clean scan" in capsys.readouterr().err
 
     def test_unsaturated_report_with_everything_allowed_still_passes(
         self, tmp_path: pathlib.Path
@@ -52,7 +54,9 @@ class TestSaturation:
             "[[tool.duplication_gate.allow]]\n"
             'members = ["src/a.py::parse", "src/b.py::parse"]\nreason = "r"\n'
         )
-        assert check_scenario(tmp_path, report(family(_A, _B)), extra=extra) == 0
+        assert check_scenario(tmp_path, report(family(_A, _B)), extra=extra) == 0, (
+            "expected: check_scenario(tmp_path, report(family(_A, _B)), extra=extra)..."
+        )
 
 
 class TestObservability:
@@ -73,10 +77,16 @@ class TestObservability:
         cli.main(["--verbose", "check", "--repository", str(repo), "--binary", "n"])
         messages = [record.getMessage() for record in caplog.records]
         operation = next(m for m in messages if m.startswith("operation=check"))
-        assert f"repository={repo.name}" in operation
-        assert "outcome=blocking" in operation
-        assert "elapsed_seconds=" in operation
-        assert any(m.startswith("subprocess program=") for m in messages)
+        assert repo.name not in operation, "no repository identifier in the record"
+        assert "outcome=blocking" in operation, (
+            "expected: 'outcome=blocking' in operation"
+        )
+        assert "elapsed_seconds=" in operation, (
+            "expected: 'elapsed_seconds=' in operation"
+        )
+        assert any(m.startswith("subprocess program=") for m in messages), (
+            "expected: any(m.startswith('subprocess program=') for m in messages)"
+        )
 
     def test_default_runs_attach_no_handler(
         self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
@@ -87,7 +97,9 @@ class TestObservability:
         write_fake_nose(repo / "n", Script(stdout=report()))
         cli.main(["check", "--repository", str(repo), "--binary", "n"])
         kinds = [type(handler) for handler in _log.logger.handlers]
-        assert kinds == [logging.NullHandler]
+        assert kinds == [logging.NullHandler], (
+            "expected: kinds == [logging.NullHandler]"
+        )
 
 
 class TestEncoding:
@@ -104,7 +116,9 @@ class TestEncoding:
             'members = ["src/é.py", "src/ü.py"]\nreason = "unicode names"\n'
         )
         found = family(location("src/é.py"), location("src/ü.py"))
-        assert check_scenario(tmp_path, report(found), extra=extra) == 0
+        assert check_scenario(tmp_path, report(found), extra=extra) == 0, (
+            "expected: check_scenario(tmp_path, report(found), extra=extra) == 0"
+        )
 
     def test_undecodable_detector_output_exits_two(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
@@ -120,8 +134,10 @@ class TestEncoding:
         )
         script.chmod(0o755)
         code = cli.main(["check", "--repository", str(repo), "--binary", "n"])
-        assert code == 2
-        assert "not valid UTF-8" in capsys.readouterr().err
+        assert code == 2, "expected: code == 2"
+        assert "not valid UTF-8" in capsys.readouterr().err, (
+            "expected: 'not valid UTF-8' in capsys.readouterr().err"
+        )
 
 
 class TestEnvironmentalFailures:
@@ -137,10 +153,14 @@ class TestEnvironmentalFailures:
         """Invalid UTF-8 in ``pyproject.toml`` is a configuration error."""
         repo = make_repository(tmp_path / "repo")
         (repo / "pyproject.toml").write_bytes(b"[project]\nname = '\xff\xfe'\n")
-        assert cli.main([*command, "--repository", str(repo), "--binary", "n"]) == 2
+        assert cli.main([*command, "--repository", str(repo), "--binary", "n"]) == 2, (
+            "expected: cli.main([*command, '--repository', str(repo), '--binary', 'n..."
+        )
         err = capsys.readouterr().err
-        assert "cannot read" in err or "cannot load" in err
-        assert "Traceback" not in err
+        assert "cannot read" in err or "cannot load" in err, (
+            "expected: 'cannot read' in err or 'cannot load' in err"
+        )
+        assert "Traceback" not in err, "expected: 'Traceback' not in err"
 
     def test_scratch_directory_failure_exits_two(
         self,
@@ -158,8 +178,12 @@ class TestEnvironmentalFailures:
             raise OSError(msg)
 
         monkeypatch.setattr(tempfile, "TemporaryDirectory", refuse)
-        assert cli.main(["check", "--repository", str(repo), "--binary", "n"]) == 2
-        assert "cannot prepare the scratch files" in capsys.readouterr().err
+        assert cli.main(["check", "--repository", str(repo), "--binary", "n"]) == 2, (
+            "expected: cli.main(['check', '--repository', str(repo), '--binary', 'n'..."
+        )
+        assert "cannot prepare the scratch files" in capsys.readouterr().err, (
+            "expected: 'cannot prepare the scratch files' in capsys.readouterr().err"
+        )
 
     def test_a_failure_is_logged_with_its_category(
         self,
@@ -175,9 +199,13 @@ class TestEnvironmentalFailures:
         write_fake_nose(repo / "n", Script(stdout=report(), version="nose 9.9.9"))
         cli.main(["check", "--repository", str(repo), "--binary", "n"])
         messages = [record.getMessage() for record in caplog.records]
-        assert any("failure category=ToolExecutionError" in m for m in messages)
+        assert any("failure category=ToolExecutionError" in m for m in messages), (
+            "expected: any('failure category=ToolExecutionError' in m for m in messa..."
+        )
         assert not any(str(repo) in m for m in messages), "records carry no paths"
         write_fake_nose(repo / "n", Script(stdout=report(family(_A, _B))))
         cli.main(["check", "--repository", str(repo), "--binary", "n"])
         messages = [record.getMessage() for record in caplog.records]
-        assert any("detector=nose-0.20.0" in m and "blocking=1" in m for m in messages)
+        assert any(
+            "detector=nose-0.20.0" in m and "blocking=1" in m for m in messages
+        ), "expected: any('detector=nose-0.20.0' in m and 'blocking=1' in m for m i..."

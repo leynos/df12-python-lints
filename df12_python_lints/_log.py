@@ -5,7 +5,8 @@ small: structured ``key=value`` records on the standard ``logging`` module,
 with bounded fields only (stable names and categories, never paths or
 free-form messages), silent by default (a library-style ``NullHandler``) and
 switched on by ``--verbose``. One record per operation carries the operation
-name, the repository directory name, the outcome and the elapsed time;
+name, the outcome, the exit status and the elapsed time (never a repository
+name or path, which are user-controlled);
 subprocess and download boundaries add debug records.
 """
 
@@ -17,7 +18,6 @@ import typing as typ
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import pathlib
 
 _OUTCOMES = {0: "ok", 1: "blocking", 2: "error"}
 
@@ -44,17 +44,13 @@ def failure(operation: str, error: Exception) -> None:
     logger.warning("operation=%s failure category=%s", operation, type(error).__name__)
 
 
-def observe(
-    operation: str, repository: pathlib.Path, run: cabc.Callable[[], int]
-) -> int:
+def observe(operation: str, run: cabc.Callable[[], int]) -> int:
     """Run one command operation and log its outcome and elapsed time.
 
     Parameters
     ----------
     operation : str
         The operation name, for example ``"check"``.
-    repository : pathlib.Path
-        The repository scope of the operation.
     run : collections.abc.Callable[[], int]
         The operation; it returns the exit status.
 
@@ -66,9 +62,8 @@ def observe(
     started = time.monotonic()
     status = run()
     logger.info(
-        "operation=%s repository=%s outcome=%s exit_status=%d elapsed_seconds=%.3f",
+        "operation=%s outcome=%s exit_status=%d elapsed_seconds=%.3f",
         operation,
-        repository.name,
         _OUTCOMES.get(status, "error"),
         status,
         time.monotonic() - started,

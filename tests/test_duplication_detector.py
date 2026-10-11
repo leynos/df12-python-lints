@@ -93,7 +93,9 @@ class TestCommandConstruction:
         assert argv.count("query") == 1, "exactly one query"
         assert "all" not in argv, "surface default must not widen"
         assert "top=0" in argv, "the unlimited budget term is passed"
-        assert argv[argv.index("--min-size") + 1] == "24"
+        assert argv[argv.index("--min-size") + 1] == "24", (
+            "expected: argv[argv.index('--min-size') + 1] == '24'"
+        )
         assert [argv[i + 1] for i, a in enumerate(argv) if a == "--exclude"] == [
             "t/**",
             "x y",
@@ -116,11 +118,13 @@ class TestCommandConstruction:
         runner = FakeRunner(query_stdout=report())
         context, _ = _prepared(tmp_path, runner)
         streams = Streams(io.StringIO(), io.StringIO())
-        assert commands.run_check(context, streams) == 0
+        assert commands.run_check(context, streams) == 0, (
+            "expected: commands.run_check(context, streams) == 0"
+        )
         assert sorted(runner.neutral_files) == [
             ("--config", ""),
             ("--ignore-file", '{"ignores": []}\n'),
-        ]
+        ], "expected: sorted(runner.neutral_files) == [ ('--config', ''), ('--ignor..."
         argv = runner.query_argv
         scratch = pathlib.Path(argv[argv.index("--config") + 1])
         assert not scratch.exists(), "the command removes the scratch files after"
@@ -146,7 +150,7 @@ class TestCommandConstruction:
         )
         _detect(load_settings(context.pyproject), context)
         assert "$(touch pwned) `x` 'q' é" in runner.query_argv, "literal argument"
-        assert not (repo / "pwned").exists()
+        assert not (repo / "pwned").exists(), "expected: not (repo / 'pwned').exists()"
 
 
 class TestBinaryResolution:
@@ -191,7 +195,7 @@ class TestBinaryResolution:
         context, settings = _prepared(tmp_path, runner)
         assert resolve_binary(settings, context) == str(
             context.repository / "bin" / "nose"
-        )
+        ), "expected: resolve_binary(settings, context) == str( context.repository..."
 
     def test_nose_bin_environment_is_honoured_and_beaten_by_the_flag(
         self, tmp_path: pathlib.Path
@@ -204,8 +208,12 @@ class TestBinaryResolution:
         flag = context_module.build_context(
             repository=str(repo), binary="b/nose", environment={"NOSE_BIN": "a/nose"}
         )
-        assert env.binary_override == repo.resolve() / "a" / "nose"
-        assert flag.binary_override == repo.resolve() / "b" / "nose"
+        assert env.binary_override == repo.resolve() / "a" / "nose", (
+            "expected: env.binary_override == repo.resolve() / 'a' / 'nose'"
+        )
+        assert flag.binary_override == repo.resolve() / "b" / "nose", (
+            "expected: flag.binary_override == repo.resolve() / 'b' / 'nose'"
+        )
 
     def test_local_install_is_preferred_to_path(self, tmp_path: pathlib.Path) -> None:
         """``.tools/nose/nose`` wins when no override is given."""
@@ -220,7 +228,9 @@ class TestBinaryResolution:
             environment={"PATH": "/nonexistent"},
             options=context_module.ContextOptions(runner=runner),
         )
-        assert resolve_binary(load_settings(context.pyproject), context) == str(local)
+        assert resolve_binary(load_settings(context.pyproject), context) == str(
+            local
+        ), "expected: resolve_binary(load_settings(context.pyproject), context) ==..."
 
 
 class TestFailuresNeverPass:
@@ -333,5 +343,7 @@ class TestFailuresNeverPass:
 
 def test_pinned_version_constant_matches_fixture() -> None:
     """The shared fixture pins the version the bundled digests cover."""
-    assert PINNED == "0.20.0"
-    assert family(location("a.py"))["witness"] == "copy-paste"
+    assert PINNED == "0.20.0", "expected: PINNED == '0.20.0'"
+    assert family(location("a.py"))["witness"] == "copy-paste", (
+        "expected: family(location('a.py'))['witness'] == 'copy-paste'"
+    )

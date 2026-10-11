@@ -135,20 +135,16 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
 def _dispatch(args: argparse.Namespace, context: RunContext, streams: Streams) -> int:
     """Run the selected operation and log its outcome."""
     if args.command == "check":
-        return observe(
-            "check", context.repository, lambda: commands.run_check(context, streams)
-        )
+        return observe("check", lambda: commands.run_check(context, streams))
     if args.command == "install":
         boundary = InstallBoundary(HostPlatform.detect())
         return observe(
             "install",
-            context.repository,
             lambda: commands.run_install(context, boundary=boundary, streams=streams),
         )
     members = [*args.member, *([args.first] if args.first else []), *args.second]
     return observe(
         "allow",
-        context.repository,
         lambda: commands.run_allow(
             context, members=members, reason=args.reason, streams=streams
         ),

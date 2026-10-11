@@ -76,7 +76,7 @@ def install_environment(
         detail = made.stderr.strip()[:200]
         # Skip only when the requested interpreter does not exist; a permission,
         # download or uv failure must fail the test, not hide the wheel checks.
-        if "No interpreter found" in made.stderr or "not found" in made.stderr:
+        if "No interpreter found" in made.stderr:
             pytest.skip(f"Python {python} is not available: {detail}")
         pytest.fail(f"cannot create the virtual environment: {detail}")
     spec = f"{wheel}[{extra}]" if extra else str(wheel)

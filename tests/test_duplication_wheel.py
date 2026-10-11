@@ -61,7 +61,7 @@ class TestInstalledWheel:
         assert allowed.returncode == 0, allowed.stdout + allowed.stderr
         assert "duplication_gate" in (repo / "pyproject.toml").read_text(
             encoding="utf-8"
-        )
+        ), "expected: 'duplication_gate' in (repo / 'pyproject.toml').read_text( en..."
         version = run([command, "--version"], cwd=outside)
         assert version.stdout.startswith("df12-duplication "), version.stdout
 
@@ -96,4 +96,6 @@ def test_wheel_bundles_the_release_manifest(wheel: pathlib.Path) -> None:
 
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
-    assert "df12_python_lints/duplication/releases.json" in names
+    assert "df12_python_lints/duplication/releases.json" in names, (
+        "expected: 'df12_python_lints/duplication/releases.json' in names"
+    )

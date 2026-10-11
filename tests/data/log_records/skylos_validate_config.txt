@@ -1,0 +1,1 @@
+operation=validate-config outcome=ok exit_status=0 elapsed_seconds=<t>
