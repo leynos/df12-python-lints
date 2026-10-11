@@ -208,3 +208,6 @@ target/
 # Untracked cache of the estate-wide en-GB-oxendict dictionary.
 .typos-oxendict-base.json
 .typos-oxendict-base.toml
+
+# Provisioned detector binaries (df12-duplication install)
+.tools/

@@ -108,8 +108,12 @@ Thirteen pylint messages:
 
 Both baseline-gated messages respect pylint's `py-version` option.
 
-And one companion tool:
+And two companion tools:
 
+- `df12-duplication` — a blocking code-duplication gate over the pinned `nose`
+  detector, with whole-family reasoned exceptions, safe authoring (`allow`) and
+  explicit, checksum-verified detector installation. See the
+  [users' guide](docs/users-guide.md#the-df12-duplication-gate).
 - `ambrleaks` — scans syrupy `.ambr` snapshot files for unredacted hex
   strings, UUIDs, emails, phone numbers, URLs, and absolute paths, with entropy
   gating, allowlists, and a baseline that survives snapshot regeneration.

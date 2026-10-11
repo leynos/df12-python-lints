@@ -9,6 +9,13 @@ dependencies = ["pylint>=3.3,<5"]
 
 [project.scripts]
 ambrleaks = "df12_python_lints.ambrleaks.cli:main"
+df12-duplication = "df12_python_lints.duplication.cli:main"
+
+[project.optional-dependencies]
+# The nose duplication command edits pyproject.toml through tomlkit. Pylint
+# already depends on it; the extra names the requirement explicitly, so the
+# command does not rely on that transitive dependency.
+duplication = ["tomlkit>=0.13,<1"]
 
 [dependency-groups]
 dev = [
