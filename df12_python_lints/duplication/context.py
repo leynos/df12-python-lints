@@ -8,61 +8,24 @@ selected repository.
 
 from __future__ import annotations
 
-import collections.abc as cabc
 import dataclasses as dc
 import pathlib
-import subprocess  # ruff: ignore[suspicious-subprocess-import] - runs one verified, repository-selected binary without a shell.
+import typing as typ
 
-from df12_python_lints._errors import ToolConfigError, ToolExecutionError
+from df12_python_lints._runtime import (
+    DEFAULT_TIMEOUT_SECONDS,
+    CommandResult,
+    CommandRunner,
+    resolve_repository,
+    run_command,
+)
 
-DEFAULT_TIMEOUT_SECONDS = 120
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+__all__ = ["CommandResult", "CommandRunner", "run_command"]
+
 DEFAULT_BINARY_RELATIVE = pathlib.PurePosixPath(".tools/nose/nose")
-
-
-@dc.dataclass(frozen=True, slots=True)
-class CommandResult:
-    """The outcome of one subprocess: its status and decoded output."""
-
-    returncode: int
-    stdout: str
-    stderr: str
-
-
-type CommandRunner = cabc.Callable[
-    [cabc.Sequence[str], pathlib.Path, cabc.Mapping[str, str], int], CommandResult
-]
-
-
-def run_command(
-    command: cabc.Sequence[str],
-    cwd: pathlib.Path,
-    environment: cabc.Mapping[str, str],
-    timeout: int,
-) -> CommandResult:
-    """Run one argument vector without a shell, bounded by ``timeout`` seconds.
-
-    Raises
-    ------
-    ToolExecutionError
-        If the program cannot start or exceeds the timeout.
-    """
-    try:
-        result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argument vector, no shell.
-            list(command),
-            cwd=cwd,
-            env=dict(environment),
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired as error:
-        msg = f"{command[0]} timed out after {timeout} seconds"
-        raise ToolExecutionError(msg) from error
-    except OSError as error:
-        msg = f"cannot run {command[0]}: {error}"
-        raise ToolExecutionError(msg) from error
-    return CommandResult(result.returncode, result.stdout, result.stderr)
 
 
 @dc.dataclass(frozen=True, slots=True)
@@ -142,15 +105,7 @@ def build_context(
     ToolConfigError
         If the repository directory or its ``pyproject.toml`` is missing.
     """
-    root = pathlib.Path(repository) if repository else pathlib.Path.cwd()
-    try:
-        resolved = root.resolve(strict=True)
-    except OSError as error:
-        msg = f"repository {root} is not accessible: {error}"
-        raise ToolConfigError(msg) from error
-    if not resolved.is_dir() or not (resolved / "pyproject.toml").is_file():
-        msg = f"{resolved} is not a repository with a pyproject.toml"
-        raise ToolConfigError(msg)
+    resolved = resolve_repository(repository)
     override = binary or environment.get("NOSE_BIN") or None
     return RunContext(
         repository=resolved,

@@ -10,12 +10,18 @@ dependencies = ["pylint>=3.3,<5"]
 [project.scripts]
 ambrleaks = "df12_python_lints.ambrleaks.cli:main"
 df12-duplication = "df12_python_lints.duplication.cli:main"
+df12-skylos = "df12_python_lints.skylos.cli:main"
 
 [project.optional-dependencies]
 # The nose duplication command edits pyproject.toml through tomlkit. Pylint
 # already depends on it; the extra names the requirement explicitly, so the
 # command does not rely on that transitive dependency.
 duplication = ["tomlkit>=0.13,<1"]
+# The one authoritative Skylos pin. `df12-skylos check` requires the installed
+# backend to equal it, so Make, workflows and this package cannot drift apart.
+# Skylos parses source with its own Python AST: run the command under an
+# interpreter at least as new as the syntax being scanned.
+skylos = ["tomlkit>=0.13,<1", "skylos==4.33.2"]
 
 [dependency-groups]
 dev = [

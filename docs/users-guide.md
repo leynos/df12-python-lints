@@ -487,6 +487,137 @@ plugin and `ambrleaks` never import any of this. See the
 [duplication gate migration guide](duplication-gate-migration.md) for the
 consumer migration.
 
+## The df12-skylos Gate
+
+The package ships `df12-skylos`, a dead-code gate over
+[Skylos](https://github.com/duriantaco/skylos). Native Skylos stays the
+analysis and gating authority. The command owns reliable invocation,
+configuration validation and safe authoring of documented exceptions; it does
+not reimplement Skylos's analysis or invent a findings engine.
+
+```bash
+df12-skylos check --repository .
+df12-skylos validate-config --repository .
+df12-skylos allow --repository . \
+  --symbol '_write_mode' \
+  --reason 'The framework invokes this override through its runtime dispatch contract.'
+```
+
+`--repository` defaults to the invocation directory. The target is never
+derived from where the command is installed, the working directory is never
+changed, and `PYTHONPATH` is ignored. `--version` prints the package version,
+the Skylos pin, the installed Skylos and the running interpreter.
+
+### Skylos exit status
+
+- `0`: a completed clean gate, or a valid configuration.
+- `1`: blocking findings.
+- `2`: invalid configuration or a failed analysis.
+
+Native Skylos with `--gate` exits `0` for a pass, `1` for blocking findings and
+`2` for an invalid configuration file or an incomplete analysis
+(`SKY-ANALYSIS-INCOMPLETE`, for example source the interpreter cannot parse).
+It cannot tell the causes of `2` apart, and the command reports that limitation
+rather than guessing from prose. One failure Skylos reports on a zero exit is
+also refused: a root with no Python files only logs
+`No Python files found in <root>`, and the command treats that as a failed
+scan. Skylos with a non-strict gate exits `0` even with findings, so the
+command requires `strict = true`.
+
+### Configuration
+
+Native settings, reasons and exceptions stay in `[tool.skylos]`:
+
+```toml
+[tool.skylos.gate]
+strict = true                    # required
+
+[tool.skylos.whitelist.documented]
+_write_mode = "The framework reads this override at runtime."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = ["pkg.Handler.on_event"]
+reason = "The framework dispatches it at runtime."
+```
+
+One small wrapper-owned table records what the native schema cannot hold:
+
+```toml
+[tool.df12_skylos]
+roots = ["pkg", "scripts"]       # production roots, scanned in one invocation
+python = "3.14"                  # minimum interpreter for the scan
+```
+
+Exclusions use the native `[tool.skylos] exclude`, not a second schema. `roots`
+are repository-relative and must exist. Roots are scanned together, so a symbol
+used only from another root is not reported, and test trees stay out of the
+reference graph. Do not add tests, examples or vendored code to the roots to
+silence a finding.
+
+`validate-config` validates without invoking Skylos, provisioning anything or
+editing files, and `check` runs the same validation first. It fails closed
+where Skylos silently drops input:
+
+- the gate must be strict;
+- every documented whitelist reason and every runtime entry-point `reason` must
+  be a non-blank string;
+- an entry-point rule must select something (`name`, `full_name`, a decorator, a
+  base class or a parent), because Skylos ignores a rule that selects nothing;
+- `type`, `full_name` and the other selector fields must be strings or arrays of
+  strings, and a missing `type` is reported as a warning;
+- table shapes are checked, and the diagnostic names the offending key.
+
+Documented whitelist entries and runtime entry-point exemptions stay distinct:
+`allow` writes only the former.
+
+### Documented exceptions
+
+`allow` records one documented whitelist entry. Native Skylos matches each key
+against a definition's simple name with `fnmatch`, so the symbol must be a
+plain Python identifier: a wildcard would silently excuse many names, and a
+dotted name never matches. Use a typed runtime entry point for a qualified
+name. The reason is stored literally, including quotes, backticks, newlines and
+Unicode; repeating a symbol never duplicates it, and a different reason updates
+it. It shares the comment-preserving transaction and the single advisory lock
+that `df12-duplication allow` uses, so concurrent runs of either command on one
+manifest do not lose each other's changes. The lock needs POSIX `flock` (Linux
+and macOS). Native `skylos whitelist` is not used: it edits the file with text
+substitution and no lock.
+
+### The backend pin and the interpreter
+
+The `skylos` extra of this package is the one authoritative Skylos pin
+(`skylos==4.33.2`). `check` requires the installed Skylos to equal it, so a
+Makefile, a workflow and the package cannot drift apart.
+
+Skylos parses source with its own interpreter's AST, so it must run under an
+interpreter at least as new as the syntax it scans, or sources are skipped. The
+scan runs under the interpreter that started `df12-skylos`, and
+`[tool.df12_skylos] python` states the minimum. Select the isolated interpreter
+when provisioning, for example `uv tool run --python 3.14`; never rely on
+whichever `python` the path resolves, and do not change the application's own
+`.venv` or `requires-python`. A scan under an older interpreter is refused
+before any analysis.
+
+Provisioning is separate from analysis. After the dependencies are installed,
+`check` downloads nothing, compiles nothing, contacts no AI service and uploads
+nothing: it passes `--no-upload --no-provenance --no-grep-verify` and the
+dead-code category only. It reaches the same verdict in a network namespace
+with no interfaces (tested).
+
+### Installing the Skylos command
+
+```bash
+pip install 'df12-python-lints[skylos]'
+```
+
+The command needs `tomlkit`, which the extra names explicitly. Python 3.12 and
+later run the command. The Pylint plugin and `ambrleaks` never import it, and
+the `skylos` dependency tree is only installed with the extra. Native Windows
+is not supported for authoring (`allow`), which needs POSIX locks. See the
+[Skylos migration guide](skylos-gate-migration.md) for consumers.
+
 ## Quality Gates
 
 Generated projects use `make all` as the standard local quality gate. It runs

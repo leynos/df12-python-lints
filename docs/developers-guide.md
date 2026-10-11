@@ -217,6 +217,64 @@ cargo-binstall provisioning, the donors' own file-walking source preflight
 (`pathspec`), the per-file atomic-write module in favour of one shared helper,
 and the duplication-specific lock.
 
+## The Skylos command
+
+`df12_python_lints/skylos/` implements `df12-skylos`. Skylos itself stays the
+authority; the package validates, invokes and adapts.
+
+| Module        | Responsibility                                                              |
+| ------------- | --------------------------------------------------------------------------- |
+| `cli.py`      | argparse surface and the explicit context construction                      |
+| `context.py`  | `SkylosContext`: repository, environment, probe, subprocess boundary        |
+| `settings.py` | the wrapper table `[tool.df12_skylos]` (roots and minimum interpreter)      |
+| `config.py`   | fail-closed validation of the consumed `[tool.skylos]` schema               |
+| `backend.py`  | the pin, runtime verification, the scan argument vector and outcome mapping |
+| `allow.py`    | documented-whitelist authoring through the shared manifest transaction      |
+| `commands.py` | `check`, `validate-config` and `allow`, and the exit statuses               |
+
+It reuses `_manifest.py` (the one lock protocol, shared with
+`df12-duplication`), `_runtime.py` (the subprocess boundary and repository
+resolution), `_validate.py` and `_errors.py`.
+
+The scan runs `skylos.cli:main` in a child of `sys.executable`, because Skylos
+has no `__main__`. The child therefore uses the same interpreter as the parent,
+which is what the minimum-interpreter check verifies. The argument vector, in
+the pinned release's order, is:
+
+```text
+--config-file <pyproject> <root>... --category dead_code --gate
+--format concise --no-upload --no-provenance --no-grep-verify
+```
+
+Native authoring is not reused: `skylos whitelist` edits with regular
+expressions and takes no lock.
+
+Skylos 4.33.2 facts the adapter depends on (re-verify when the pin changes):
+the whitelist matches the simple name with `fnmatch`; a configuration without
+`strict = true` exits `0` with findings; a configuration without
+`[tool.skylos]` or an unreadable file exits `2`; source that cannot be parsed
+exits `2` with `SKY-ANALYSIS-INCOMPLETE`; and a root with no Python files logs
+`No Python files found in <root>` and exits `0`. Both the CLI `--exclude` and
+the native `exclude` setting prune a named folder.
+
+The tests mirror the duplication layers: hermetic unit tests with a scripted
+subprocess boundary and probe; bounded tests against the real pinned Skylos
+(skipped unless the `skylos` extra is installed, which the CI matrix does),
+including an offline run in an empty network namespace; and non-editable wheel
+installations for Python 3.12 and 3.14, with and without the extra.
+
+### Skylos provenance
+
+The behaviour and tests come from the production dead-code invocation in the
+Episodic Makefile and ADR-016, and from `syrupy-mdast` (`f9bd75b`) and `lading`
+(`efbafb1`): the strict-gate, reason and typed entry-point contracts, and the
+whitelist boundary tests (missing and whitespace-only values, shell-sensitive
+arguments, non-mutation on invalid input). Deliberately discarded: the Makefile
+shell transport and its quoting property suite, the literal recipe and variable
+assertions, the generic Makeutil/PyYAML workflow helpers (including their
+per-lookup Makefile reparse), per-consumer symbol inventories, and the
+`.skylos-whitelist.lock` that did not coordinate with the duplication lock.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and

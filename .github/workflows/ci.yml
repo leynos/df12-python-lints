@@ -122,7 +122,7 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       - name: Install code
-        run: uv sync --group dev --python ${{ matrix.python-version }}
+        run: uv sync --group dev --extra skylos --python ${{ matrix.python-version }}
 
       - name: Cache the pinned nose detector
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

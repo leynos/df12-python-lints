@@ -9,77 +9,19 @@ unrelated ``scripts`` package on the working directory.
 
 from __future__ import annotations
 
-import os
-import pathlib
-import shutil
-import subprocess  # ruff: ignore[suspicious-subprocess-import] - drives uv and the installed console script.
 import typing as typ
 
 import pytest
 from duplication_support import Script, make_repository, report, write_fake_nose
+from wheel_support import PYTHONS, UV, install_environment, run
 
-_UV = shutil.which("uv")
-_ROOT = pathlib.Path(__file__).resolve().parent.parent
-pytestmark = pytest.mark.skipif(_UV is None, reason="needs uv to build and install")
-_PYTHONS = ["3.12", "3.14"]
+pytestmark = pytest.mark.skipif(UV is None, reason="needs uv to build and install")
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+    import pathlib
 
 
-def _clean_env() -> dict[str, str]:
-    """Environment with no ``PYTHONPATH`` and no activated virtualenv."""
-    env = {
-        k: v for k, v in os.environ.items() if k not in {"PYTHONPATH", "VIRTUAL_ENV"}
-    }
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    return env
-
-
-def _run(
-    args: list[str], *, cwd: pathlib.Path, timeout: int = 600
-) -> subprocess.CompletedProcess[str]:
-    """Run one command in a clean environment and capture its output."""
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argument vectors built by this module.
-        args,
-        cwd=cwd,
-        env=_clean_env(),
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-
-
-@pytest.fixture(scope="module")
-def wheel(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
-    """Build the wheel once for the module."""
-    out = tmp_path_factory.mktemp("wheel")
-    assert _UV is not None
-    built = _run([_UV, "build", "--wheel", "--out-dir", str(out), str(_ROOT)], cwd=out)
-    assert built.returncode == 0, built.stderr
-    return next(out.glob("df12_python_lints-*.whl"))
-
-
-def _environment(
-    root: pathlib.Path, wheel: pathlib.Path, python: str, *, extra: bool
-) -> pathlib.Path:
-    """Create a fresh venv for ``python`` and install the wheel; return its bin."""
-    assert _UV is not None
-    venv = root / f"venv-{python}-{'extra' if extra else 'bare'}"
-    made = _run([_UV, "venv", "--python", python, str(venv)], cwd=root)
-    if made.returncode != 0:
-        pytest.skip(f"Python {python} is not available: {made.stderr.strip()[:200]}")
-    spec = f"{wheel}[duplication]" if extra else str(wheel)
-    installed = _run(
-        [_UV, "pip", "install", "--python", str(venv / "bin" / "python"), spec],
-        cwd=root,
-    )
-    assert installed.returncode == 0, installed.stderr
-    return venv / "bin"
-
-
-@pytest.mark.parametrize("python", _PYTHONS)
+@pytest.mark.parametrize("python", PYTHONS)
 class TestInstalledWheel:
     """The console script from a fresh, non-editable installation."""
 
@@ -87,7 +29,7 @@ class TestInstalledWheel:
         self, tmp_path: pathlib.Path, wheel: pathlib.Path, python: str
     ) -> None:
         """check, allow and --version work with a decoy ``scripts`` package present."""
-        bin_dir = _environment(tmp_path, wheel, python, extra=True)
+        bin_dir = install_environment(tmp_path, wheel, python, extra="duplication")
         outside = tmp_path / "outside"
         (outside / "scripts").mkdir(parents=True)
         (outside / "scripts" / "__init__.py").write_text(
@@ -96,11 +38,11 @@ class TestInstalledWheel:
         repo = make_repository(tmp_path / "target")
         write_fake_nose(repo / "n", Script(stdout=report()))
         command = str(bin_dir / "df12-duplication")
-        checked = _run(
+        checked = run(
             [command, "check", "--repository", str(repo), "--binary", "n"], cwd=outside
         )
         assert checked.returncode == 0, checked.stdout + checked.stderr
-        allowed = _run(
+        allowed = run(
             [
                 command,
                 "allow",
@@ -117,22 +59,22 @@ class TestInstalledWheel:
         assert "duplication_gate" in (repo / "pyproject.toml").read_text(
             encoding="utf-8"
         )
-        version = _run([command, "--version"], cwd=outside)
+        version = run([command, "--version"], cwd=outside)
         assert version.stdout.startswith("df12-duplication "), version.stdout
 
     def test_existing_commands_work_without_the_extra(
         self, tmp_path: pathlib.Path, wheel: pathlib.Path, python: str
     ) -> None:
         """Pylint plugin and ambrleaks need none of the duplication dependencies."""
-        bin_dir = _environment(tmp_path, wheel, python, extra=False)
+        bin_dir = install_environment(tmp_path, wheel, python, extra=None)
         snap = tmp_path / "snaps"
         (snap / "__snapshots__").mkdir(parents=True)
         (snap / "__snapshots__" / "test_x.ambr").write_text(
             "# serializer version: 1\n", encoding="utf-8"
         )
-        scan = _run([str(bin_dir / "ambrleaks"), str(snap)], cwd=tmp_path)
+        scan = run([str(bin_dir / "ambrleaks"), str(snap)], cwd=tmp_path)
         assert scan.returncode == 0, scan.stdout + scan.stderr
-        plugin = _run(
+        plugin = run(
             [
                 str(bin_dir / "python"),
                 "-c",
@@ -141,7 +83,7 @@ class TestInstalledWheel:
             cwd=tmp_path,
         )
         assert plugin.returncode == 0, "importing the plugin must not load tomlkit"
-        help_ = _run([str(bin_dir / "df12-duplication"), "--help"], cwd=tmp_path)
+        help_ = run([str(bin_dir / "df12-duplication"), "--help"], cwd=tmp_path)
         assert help_.returncode == 0, help_.stderr
 
 
@@ -150,5 +92,5 @@ def test_wheel_bundles_the_release_manifest(wheel: pathlib.Path) -> None:
     import zipfile
 
     with zipfile.ZipFile(wheel) as archive:
-        names: cabc.Collection[str] = archive.namelist()
+        names = archive.namelist()
     assert "df12_python_lints/duplication/releases.json" in names

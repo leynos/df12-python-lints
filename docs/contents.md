@@ -21,6 +21,9 @@ documentation set.
 - [Duplication gate migration guide](duplication-gate-migration.md) explains
   how to move a vendored nose gate onto the installed `df12-duplication`
   command, with the command mapping and a deletion checklist.
+- [Skylos gate migration guide](skylos-gate-migration.md) explains how to move
+  a Skylos Makefile target and its copied contract suites onto the installed
+  `df12-skylos` command, with a deletion checklist.
 - [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 
