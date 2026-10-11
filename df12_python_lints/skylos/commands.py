@@ -10,6 +10,7 @@ guessed from prose.
 
 from __future__ import annotations
 
+import logging
 import tomllib
 import typing as typ
 
@@ -28,6 +29,7 @@ if typ.TYPE_CHECKING:
 
     from .context import SkylosContext
 
+_LOG = logging.getLogger("df12_python_lints.skylos")
 EXIT_OK = 0
 EXIT_BLOCKING = 1
 EXIT_ERROR = 2
@@ -111,6 +113,11 @@ def run_check(context: SkylosContext, streams: Streams) -> int:
         failure("check", error)
         print(describe(error), file=streams.err)
         return EXIT_ERROR
+    _LOG.info(
+        "check backend=%s outcome=%s",
+        backend.split(" under")[0].replace(" ", "-"),
+        outcome,
+    )
     if outcome == "blocking":
         print(
             f"Remove the dead code, or record a considered exception:\n  {ALLOW_HINT}",

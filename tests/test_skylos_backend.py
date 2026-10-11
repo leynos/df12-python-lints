@@ -37,7 +37,9 @@ class TestPin:
                 "pylint<5,>=3.3",
             ],
         )
-        assert backend.pinned_version() == "9.8.7"
+        assert backend.pinned_version() == "9.8.7", (
+            "expected: backend.pinned_version() == '9.8.7'"
+        )
 
     @pytest.mark.parametrize(
         "requirements",
@@ -58,7 +60,9 @@ class TestPin:
 
     def test_real_metadata_pins_a_version(self) -> None:
         """The shipped extra pins an exact release."""
-        assert backend.pinned_version() == PIN
+        assert backend.pinned_version() == PIN, (
+            "expected: backend.pinned_version() == PIN"
+        )
 
     def test_installed_version_is_none_when_absent(
         self, monkeypatch: pytest.MonkeyPatch
@@ -70,7 +74,9 @@ class TestPin:
             raise importlib.metadata.PackageNotFoundError
 
         monkeypatch.setattr(importlib.metadata, "version", missing)
-        assert backend.installed_version() is None
+        assert backend.installed_version() is None, (
+            "expected: backend.installed_version() is None"
+        )
 
 
 def test_the_dev_group_pin_equals_the_extra_pin() -> None:
@@ -80,7 +86,9 @@ def test_the_dev_group_pin_equals_the_extra_pin() -> None:
     manifest = pathlib.Path(__file__).resolve().parent.parent / "pyproject.toml"
     data = tomllib.loads(manifest.read_text(encoding="utf-8"))
     dev = [r for r in data["dependency-groups"]["dev"] if r.startswith("skylos==")]
-    assert dev == [f"skylos=={backend.pinned_version()}"]
+    assert dev == [f"skylos=={backend.pinned_version()}"], (
+        "expected: dev == [f'skylos=={backend.pinned_version()}']"
+    )
 
 
 class TestVerification:
@@ -91,7 +99,7 @@ class TestVerification:
         assert (
             backend.verify_backend(_SETTINGS, probe())
             == f"skylos {PIN} under Python 3.14+"
-        )
+        ), "the description names the backend and the interpreter"
 
     def test_older_interpreter_is_rejected_with_the_way_to_select_one(self) -> None:
         """A scan that cannot parse the syntax must not run."""
@@ -122,23 +130,27 @@ class TestCommand:
         command = backend.build_command(
             "py", pathlib.Path("/r/pyproject.toml"), _SETTINGS
         )
-        assert command[:4] == ["py", "-I", "-c", backend._BOOTSTRAP]
+        assert command[:4] == ["py", "-I", "-c", backend._BOOTSTRAP], (
+            "expected: command[:4] == ['py', '-I', '-c', backend._BOOTSTRAP]"
+        )
         assert command[4:9] == [
             "--config-file",
             "/r/pyproject.toml",
             "a",
             "b/c.py",
             "--category",
-        ]
+        ], "expected: command[4:9] == [ '--config-file', '/r/pyproject.toml', 'a',..."
         assert command[8:] == [
             "--category", "dead_code", "--gate", "--format", "concise",
             "--no-upload", "--no-provenance", "--no-grep-verify",
-        ]  # fmt: skip
+        ], "the scan flags are local-only and ordered after the roots"  # fmt: skip
 
     def test_command_never_requests_uploads_or_verification(self) -> None:
         """Flags that would contact a service are absent."""
         command = backend.build_command("py", pathlib.Path("/p"), _SETTINGS)
-        assert not {"--upload", "--verify", "--llm", "--model", "--sca"} & set(command)
+        assert not {"--upload", "--verify", "--llm", "--model", "--sca"} & set(
+            command
+        ), "expected: not {'--upload', '--verify', '--llm', '--model', '--sca'} & s..."
 
     def test_all_roots_share_one_invocation(self, tmp_path: pathlib.Path) -> None:
         """Cross-root references need one scan, not one per root."""
@@ -170,7 +182,9 @@ class TestOutcomeMapping:
         self, status: int, expected: str
     ) -> None:
         """Success remains success and a blocking result remains blocking."""
-        assert backend.classify(CommandResult(status, "", "")) == expected
+        assert backend.classify(CommandResult(status, "", "")) == expected, (
+            "expected: backend.classify(CommandResult(status, '', '')) == expected"
+        )
 
     def test_status_two_is_a_failed_analysis(self) -> None:
         """An invalid configuration or incomplete analysis is an error."""
@@ -198,4 +212,4 @@ class TestOutcomeMapping:
         assert (
             backend.classify(CommandResult(0, "", "INFO - scanned 3 files\n"))
             == "clean"
-        )
+        ), "expected: backend.classify(CommandResult(0, '', 'INFO - scanned 3 files..."

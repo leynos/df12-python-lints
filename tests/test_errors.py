@@ -35,7 +35,7 @@ def test_describe_labels_each_error_class(
     error: ToolConfigError, expected: str
 ) -> None:
     """Execution and platform errors are plain; the base class is configuration."""
-    assert describe(error) == expected
+    assert describe(error) == expected, "expected: describe(error) == expected"
 
 
 class TestCommandLevelLabels:
@@ -79,7 +79,9 @@ class TestCommandLevelLabels:
             runner=timeout,
         )
         err = io.StringIO()
-        assert commands.run_check(context, Streams(io.StringIO(), err)) == 2
+        assert commands.run_check(context, Streams(io.StringIO(), err)) == 2, (
+            "expected: commands.run_check(context, Streams(io.StringIO(), err)) == 2"
+        )
         assert err.getvalue().startswith("error: "), err.getvalue()
 
     def test_invalid_configuration_is_labelled_as_configuration(

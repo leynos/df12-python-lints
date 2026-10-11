@@ -110,14 +110,14 @@ class TestVerdicts:
         )
         code, out, _ = _check(repo)
         assert code == 0, out
-        assert "skylos gate passed" in out
+        assert "skylos gate passed" in out, "expected: 'skylos gate passed' in out"
 
     def test_planted_unused_function_blocks(self, tmp_path: pathlib.Path) -> None:
         """An unused production function is a blocking finding."""
         repo = _repo(tmp_path, {"pkg/__init__.py": "", "pkg/core.py": _CORE})
         code, out, _ = _check(repo)
-        assert code == 1
-        assert "never_called" in out
+        assert code == 1, "expected: code == 1"
+        assert "never_called" in out, "expected: 'never_called' in out"
 
     def test_a_test_only_reference_does_not_rescue_production_code(
         self, tmp_path: pathlib.Path
@@ -130,7 +130,7 @@ class TestVerdicts:
         }
         code, out, _ = _check(_repo(tmp_path, files))
         assert code == 1, "the test reference must not rescue the unused function"
-        assert "never_called" in out
+        assert "never_called" in out, "expected: 'never_called' in out"
 
     def test_documented_whitelist_excuses_only_the_named_symbol(
         self, tmp_path: pathlib.Path
@@ -145,9 +145,9 @@ class TestVerdicts:
             "pkg/core.py": _CORE + "\n\ndef other_dead():\n    return 3\n",
         }
         code, out, _ = _check(_repo(tmp_path, files, extra))
-        assert code == 1
-        assert "other_dead" in out
-        assert "never_called" not in out
+        assert code == 1, "expected: code == 1"
+        assert "other_dead" in out, "expected: 'other_dead' in out"
+        assert "never_called" not in out, "expected: 'never_called' not in out"
 
     def test_runtime_entry_point_is_narrow(self, tmp_path: pathlib.Path) -> None:
         """A callback exemption spares the callback but not an unused neighbour."""
@@ -158,9 +158,9 @@ class TestVerdicts:
         )
         files = {"pkg/__init__.py": "", "pkg/core.py": _CALLBACK}
         code, out, _ = _check(_repo(tmp_path, files, extra))
-        assert code == 1
-        assert "unrelated_dead" in out
-        assert "on_event" not in out
+        assert code == 1, "expected: code == 1"
+        assert "unrelated_dead" in out, "expected: 'unrelated_dead' in out"
+        assert "on_event" not in out, "expected: 'on_event' not in out"
 
     def test_roots_are_scanned_together_so_cross_root_references_count(
         self, tmp_path: pathlib.Path
@@ -207,7 +207,7 @@ class TestIsolation:
         repo = _repo(tmp_path / "t", {"pkg/__init__.py": "", "pkg/core.py": _CORE})
         code, out, _ = _check(repo)
         assert code == 1, out
-        assert "never_called" in out
+        assert "never_called" in out, "expected: 'never_called' in out"
 
 
 class TestFailuresNeverPass:
@@ -218,14 +218,14 @@ class TestFailuresNeverPass:
         (tmp_path / "pkg").mkdir()
         code, _, err = _check(_repo(tmp_path, {}))
         assert code == 2, err
-        assert "no Python files" in err
+        assert "no Python files" in err, "expected: 'no Python files' in err"
 
     def test_parse_failure_is_a_failed_analysis(self, tmp_path: pathlib.Path) -> None:
         """Source that cannot be parsed is never reported as clean."""
         repo = _repo(tmp_path, {"pkg/__init__.py": "", "pkg/bad.py": "def f(:\n"})
         code, out, err = _check(repo)
         assert code == 2, out + err
-        assert "ANALYSIS-INCOMPLETE" in out
+        assert "ANALYSIS-INCOMPLETE" in out, "expected: 'ANALYSIS-INCOMPLETE' in out"
 
     def test_missing_root_is_rejected_before_the_scan(
         self, tmp_path: pathlib.Path
@@ -234,8 +234,8 @@ class TestFailuresNeverPass:
         code, _, err = _check(
             _repo(tmp_path, {"pkg/__init__.py": ""}, roots='["nope"]')
         )
-        assert code == 2
-        assert "does not exist" in err
+        assert code == 2, "expected: code == 2"
+        assert "does not exist" in err, "expected: 'does not exist' in err"
 
     def test_lax_gate_is_rejected_even_though_skylos_would_exit_zero(
         self, tmp_path: pathlib.Path
@@ -249,8 +249,8 @@ class TestFailuresNeverPass:
         )
         (repo / "pyproject.toml").write_text(text, encoding="utf-8")
         code, _, err = _check(repo)
-        assert code == 2
-        assert "strict must be true" in err
+        assert code == 2, "expected: code == 2"
+        assert "strict must be true" in err, "expected: 'strict must be true' in err"
 
     def test_timeout_is_reported(self, tmp_path: pathlib.Path) -> None:
         """A scan that exceeds its bound is an error, not a pass."""
@@ -263,8 +263,10 @@ class TestFailuresNeverPass:
         )
         err = io.StringIO()
         code = commands.run_check(context, Streams(io.StringIO(), err))
-        assert code == 2
-        assert "timed out" in err.getvalue() or "cannot run" in err.getvalue()
+        assert code == 2, "expected: code == 2"
+        assert "timed out" in err.getvalue() or "cannot run" in err.getvalue(), (
+            "expected: 'timed out' in err.getvalue() or 'cannot run' in err.getvalue()"
+        )
 
 
 @pytest.mark.skipif(
@@ -287,7 +289,7 @@ def test_the_scan_needs_no_network(tmp_path: pathlib.Path) -> None:
     if "unshare:" in err and "Operation not permitted" in err:
         pytest.skip("user namespaces are not permitted here")
     assert code == 1, out + err
-    assert "never_called" in out
+    assert "never_called" in out, "expected: 'never_called' in out"
 
 
 def test_the_running_interpreter_is_the_scan_interpreter() -> None:
@@ -299,4 +301,4 @@ def test_the_running_interpreter_is_the_scan_interpreter() -> None:
             "df12_python_lints.skylos.settings", fromlist=["ScanSettings"]
         ).ScanSettings(("a",), (3, 12)),
     )
-    assert command[0] == sys.executable
+    assert command[0] == sys.executable, "expected: command[0] == sys.executable"

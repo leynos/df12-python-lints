@@ -15,6 +15,8 @@ documentation set.
 - [Version 0.2.0 migration guide](migration-0.2.0.md) explains the new
   dataclass-slots rule, the reassigned message identifiers, and the required
   pylint configuration changes.
+- [Version 0.4.0 migration guide](migration-0.4.0.md) lists the two new console
+  commands, the optional extras and the behaviour to know about.
 - [Version 0.3.0 migration guide](migration-0.3.0.md) explains the expanded
   Ruff suppression grammar, explanation requirements, and neutral range
   terminators.

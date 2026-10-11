@@ -37,9 +37,10 @@ unchanged.
 ## Makefile and CI shape
 
 ```make
-SKYLOS = $(UV_GATE) tool --python 3.14 \
-  --from 'git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_REF)' \
-  --with 'skylos==$(SKYLOS_VERSION)' -- df12-skylos
+DF12_PYTHON_LINTS_SHA = <40-hex main or release commit>
+SKYLOS = $(UV_GATE) tool --python 3.14 --from \
+  'df12-python-lints[skylos] @ git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_SHA)' \
+  -- df12-skylos
 
 skylos: ## Detect dead production code
 	$(SKYLOS) check --repository .
@@ -48,19 +49,19 @@ skylos-allow: ## Record one documented exception (SYMBOL=name REASON=text)
 	$(SKYLOS) allow --repository . --symbol '$(SYMBOL)' --reason '$(REASON)'
 ```
 
-`SKYLOS_VERSION` must equal the package's pin; `df12-skylos check` fails with
-the two versions named if it does not. Until the vendored `uv_gate` accepts
-`'df12-python-lints[skylos] @ git+...@<sha>'`, the `--with` spelling above is
-the pinned form it accepts; once it does, drop `--with` and the Make copy of
-the version entirely. CI calls the same `make skylos` target.
+The `skylos` extra carries the one Skylos pin, so no Make copy of the version
+remains. The extras form needs the vendored `uv_gate` 0.2.1 (merged in
+shared-actions) and a full 40-digit commit; quote the `--from` value. CI calls
+the same `make skylos` target.
 
 ## Deletion checklist
 
 Delete only after `make skylos` passes through the installed command:
 
-- [ ] The `SKYLOS_CLI`, `SKYLOS`, `SKYLOS_VERSION`, `SKYLOS_PRODUCTION_TARGETS`,
-  `SKYLOS_EXCLUDE_FOLDERS` and `SKYLOS_WHITELIST_LOCK` variables and the old
-  `skylos-allow` recipe.
+- [ ] The old `SKYLOS_CLI`, `SKYLOS_VERSION`, `SKYLOS_PRODUCTION_TARGETS`,
+  `SKYLOS_EXCLUDE_FOLDERS` and `SKYLOS_WHITELIST_LOCK` definitions and the old
+  `skylos-allow` recipe body. Keep the new `SKYLOS` definition (and
+  `DF12_PYTHON_LINTS_SHA`), which the replacement targets use.
 - [ ] Copied implementation and boundary suites: the whitelist-boundary and
   allow-contract tests, and any generic Make or workflow parsing helper that
   only they used (`make_contract`, Makeutil provisioning, PyYAML parsing). Keep

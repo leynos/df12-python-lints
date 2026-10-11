@@ -73,7 +73,12 @@ def install_environment(
     venv = root / f"venv-{python}-{extra or 'bare'}"
     made = run([UV, "venv", "--python", python, str(venv)], cwd=root)
     if made.returncode != 0:
-        pytest.skip(f"Python {python} is not available: {made.stderr.strip()[:200]}")
+        detail = made.stderr.strip()[:200]
+        # Skip only when the requested interpreter does not exist; a permission,
+        # download or uv failure must fail the test, not hide the wheel checks.
+        if "No interpreter found" in made.stderr or "not found" in made.stderr:
+            pytest.skip(f"Python {python} is not available: {detail}")
+        pytest.fail(f"cannot create the virtual environment: {detail}")
     spec = f"{wheel}[{extra}]" if extra else str(wheel)
     installed = run(
         [UV, "pip", "install", "--python", str(venv / "bin" / "python"), spec],

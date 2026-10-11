@@ -1,0 +1,6 @@
+exit: 1
+--- stdout
+pkg/core.py:5  SKY-U001  unused function: never_called
+Remove the dead code, or record a considered exception:
+  df12-skylos allow --symbol '<name>' --reason '<why this stays>'
+--- stderr

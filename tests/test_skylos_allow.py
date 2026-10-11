@@ -36,7 +36,9 @@ class TestSymbolSyntax:
     @pytest.mark.parametrize("symbol", ["_write_mode", "file_extension", "ünï", "A"])
     def test_plain_identifiers_are_accepted(self, symbol: str) -> None:
         """Ordinary and Unicode identifiers pass through unchanged."""
-        assert validate_symbol(symbol) == symbol
+        assert validate_symbol(symbol) == symbol, (
+            "expected: validate_symbol(symbol) == symbol"
+        )
 
     @pytest.mark.parametrize(
         "symbol",
@@ -73,11 +75,13 @@ class TestRecording:
                 manifest, symbol="_write_mode", reason="Read at runtime."
             )
             == "added"
+        ), "expected: record_whitelist_entry( manifest, symbol='_write_mode', reaso..."
+        assert _documented(manifest) == {"_write_mode": "Read at runtime."}, (
+            "expected: _documented(manifest) == {'_write_mode': 'Read at runtime.'}"
         )
-        assert _documented(manifest) == {"_write_mode": "Read at runtime."}
         assert "[tool.skylos.whitelist.documented]" in manifest.read_text(
             encoding="utf-8"
-        )
+        ), "expected: '[tool.skylos.whitelist.documented]' in manifest.read_text( e..."
 
     def test_repeating_a_symbol_neither_duplicates_nor_rewrites(
         self, tmp_path: pathlib.Path
@@ -86,15 +90,21 @@ class TestRecording:
         manifest = _manifest(tmp_path)
         record_whitelist_entry(manifest, symbol="x", reason="why")
         before = manifest.read_bytes()
-        assert record_whitelist_entry(manifest, symbol="x", reason="why") == "unchanged"
+        assert (
+            record_whitelist_entry(manifest, symbol="x", reason="why") == "unchanged"
+        ), "expected: record_whitelist_entry(manifest, symbol='x', reason='why') ==..."
         assert manifest.read_bytes() == before, "an unchanged request must not rewrite"
 
     def test_a_different_reason_updates_in_place(self, tmp_path: pathlib.Path) -> None:
         """The reason is replaced; the symbol stays single."""
         manifest = _manifest(tmp_path)
         record_whitelist_entry(manifest, symbol="x", reason="old")
-        assert record_whitelist_entry(manifest, symbol="x", reason="new") == "updated"
-        assert _documented(manifest) == {"x": "new"}
+        assert (
+            record_whitelist_entry(manifest, symbol="x", reason="new") == "updated"
+        ), "expected: record_whitelist_entry(manifest, symbol='x', reason='new') ==..."
+        assert _documented(manifest) == {"x": "new"}, (
+            "expected: _documented(manifest) == {'x': 'new'}"
+        )
 
     def test_shell_sensitive_unicode_reason_is_preserved_literally(
         self, tmp_path: pathlib.Path
@@ -103,7 +113,9 @@ class TestRecording:
         manifest = _manifest(tmp_path)
         reason = ' it\'s "q" $(rm -rf /) `x` \\ é\nsecond line '
         record_whitelist_entry(manifest, symbol="callback", reason=reason)
-        assert _documented(manifest) == {"callback": reason}
+        assert _documented(manifest) == {"callback": reason}, (
+            "expected: _documented(manifest) == {'callback': reason}"
+        )
 
     @pytest.mark.parametrize(
         ("symbol", "reason"),
@@ -117,7 +129,9 @@ class TestRecording:
         before = manifest.read_bytes()
         with pytest.raises(ToolConfigError):
             record_whitelist_entry(manifest, symbol=symbol, reason=reason)
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
     def test_comments_unrelated_tables_modes_and_nose_entries_are_preserved(
         self, tmp_path: pathlib.Path
@@ -131,10 +145,14 @@ class TestRecording:
         manifest.chmod(0o640)
         record_whitelist_entry(manifest, symbol="x", reason="why")
         text = manifest.read_text(encoding="utf-8")
-        assert "# keep me" in text
-        assert "x = 1  # inline" in text
-        assert 'reason = "nose entry"' in text
-        assert manifest.stat().st_mode & 0o777 == 0o640
+        assert "# keep me" in text, "expected: '# keep me' in text"
+        assert "x = 1  # inline" in text, "expected: 'x = 1 # inline' in text"
+        assert 'reason = "nose entry"' in text, (
+            "expected: 'reason = 'nose entry'' in text"
+        )
+        assert manifest.stat().st_mode & 0o777 == 0o640, (
+            "expected: manifest.stat().st_mode & 0o777 == 0o640"
+        )
 
     def test_an_invalid_existing_value_is_refused_not_reported_unchanged(
         self, tmp_path: pathlib.Path
@@ -145,7 +163,9 @@ class TestRecording:
         before = manifest.read_bytes()
         with pytest.raises(ToolConfigError, match="is not a string"):
             record_whitelist_entry(manifest, symbol="x", reason="3")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
     @pytest.mark.parametrize("control", ["\x1b", "\x00", "\x07", "\x7f", "\r"])
     def test_a_reason_with_a_control_character_is_rejected(
@@ -156,7 +176,9 @@ class TestRecording:
         before = manifest.read_bytes()
         with pytest.raises(ToolConfigError, match="control characters"):
             record_whitelist_entry(manifest, symbol="x", reason=f"bad{control}x")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
     def test_runtime_entry_points_are_never_created(
         self, tmp_path: pathlib.Path
@@ -164,7 +186,9 @@ class TestRecording:
         """An ordinary whitelist request never becomes a typed exemption."""
         manifest = _manifest(tmp_path)
         record_whitelist_entry(manifest, symbol="x", reason="why")
-        assert "entrypoints" not in manifest.read_text(encoding="utf-8")
+        assert "entrypoints" not in manifest.read_text(encoding="utf-8"), (
+            "expected: 'entrypoints' not in manifest.read_text(encoding='utf-8')"
+        )
 
     def test_existing_documented_entries_and_entry_points_stay_distinct(
         self, tmp_path: pathlib.Path
@@ -177,8 +201,12 @@ class TestRecording:
         manifest = _manifest(tmp_path, POLICY + extra)
         record_whitelist_entry(manifest, symbol="x", reason="why")
         data = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]["skylos"]
-        assert data["dead_code"]["entrypoints"][0]["full_name"] == "a.b"
-        assert data["whitelist"]["documented"] == {"x": "why"}
+        assert data["dead_code"]["entrypoints"][0]["full_name"] == "a.b", (
+            "expected: data['dead_code']['entrypoints'][0]['full_name'] == 'a.b'"
+        )
+        assert data["whitelist"]["documented"] == {"x": "why"}, (
+            "expected: data['whitelist']['documented'] == {'x': 'why'}"
+        )
 
     @pytest.mark.parametrize(
         ("policy", "fragment"),
@@ -197,7 +225,9 @@ class TestRecording:
         before = manifest.read_bytes()
         with pytest.raises(ToolConfigError, match=fragment):
             record_whitelist_entry(manifest, symbol="x", reason="why")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
     def test_command_line_records_and_reports(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
@@ -213,9 +243,13 @@ class TestRecording:
             "--reason",
             "why",
         ])
-        assert code == 0
-        assert "recorded documented Skylos exception for x" in capsys.readouterr().out
-        assert _documented(manifest) == {"x": "why"}
+        assert code == 0, "expected: code == 0"
+        assert (
+            "recorded documented Skylos exception for x" in capsys.readouterr().out
+        ), "expected: 'recorded documented Skylos exception for x' in capsys.readou..."
+        assert _documented(manifest) == {"x": "why"}, (
+            "expected: _documented(manifest) == {'x': 'why'}"
+        )
 
     def test_command_line_rejects_invalid_requests_with_status_two(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
@@ -232,9 +266,13 @@ class TestRecording:
             "--reason",
             "why",
         ])
-        assert code == 2
-        assert "plain Python identifier" in capsys.readouterr().err
-        assert manifest.read_bytes() == before
+        assert code == 2, "expected: code == 2"
+        assert "plain Python identifier" in capsys.readouterr().err, (
+            "expected: 'plain Python identifier' in capsys.readouterr().err"
+        )
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
 
 class TestConcurrentAuthoring:
@@ -246,7 +284,9 @@ class TestConcurrentAuthoring:
         run_workers([
             (manifest, [("skylos", f"p{n}_{i}") for i in range(6)]) for n in range(4)
         ])
-        assert len(_documented(manifest)) == 24
+        assert len(_documented(manifest)) == 24, (
+            "expected: len(_documented(manifest)) == 24"
+        )
 
     def test_skylos_with_nose_loses_nothing(self, tmp_path: pathlib.Path) -> None:
         """Skylos and nose authoring on one manifest keep both sets of edits."""
@@ -278,7 +318,9 @@ _REASONS = st.text(min_size=1, max_size=40).filter(
 @given(symbol=_IDENTIFIERS)
 def test_every_plain_identifier_is_a_valid_symbol(symbol: str) -> None:
     """The symbol contract accepts exactly plain identifiers."""
-    assert validate_symbol(symbol) == symbol
+    assert validate_symbol(symbol) == symbol, (
+        "expected: validate_symbol(symbol) == symbol"
+    )
 
 
 @given(

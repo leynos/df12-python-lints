@@ -1,0 +1,4 @@
+exit: 2
+--- stdout
+--- stderr
+configuration error: tool.skylos.gate.strict must be true: a non-strict gate exits 0 with findings
