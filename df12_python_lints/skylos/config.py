@@ -61,17 +61,23 @@ def validate_native(data: cabc.Mapping[str, object]) -> tuple[str, ...]:
         If the gate is not strict, or a consumed table has the wrong shape,
         or an exception lacks a reason or a selector.
     """
+    skylos = _skylos_table(data)
+    _validate_gate(skylos.get("gate"))
+    if "exclude" in skylos:
+        _validate.require_string_tuple(skylos["exclude"], context="tool.skylos.exclude")
+    return (
+        *_validate_whitelist(skylos.get("whitelist")),
+        *_validate_entry_points(skylos.get("dead_code")),
+    )
+
+
+def _skylos_table(data: cabc.Mapping[str, object]) -> cabc.Mapping[str, object]:
+    """Return ``[tool.skylos]``, which Skylos itself requires."""
     tool = _validate.require_table(data.get("tool", {}), context="tool")
     if "skylos" not in tool:
         msg = "tool.skylos is required: Skylos reads its policy from [tool.skylos]"
         raise ToolConfigError(msg)
-    skylos = _validate.require_table(tool["skylos"], context="tool.skylos")
-    _validate_gate(skylos.get("gate"))
-    if "exclude" in skylos:
-        _validate.require_string_tuple(skylos["exclude"], context="tool.skylos.exclude")
-    warnings = list(_validate_whitelist(skylos.get("whitelist")))
-    warnings.extend(_validate_entry_points(skylos.get("dead_code")))
-    return tuple(warnings)
+    return _validate.require_table(tool["skylos"], context="tool.skylos")
 
 
 def _validate_gate(value: object) -> None:
@@ -85,24 +91,35 @@ def _validate_gate(value: object) -> None:
         raise ToolConfigError(msg)
 
 
-def _validate_whitelist(value: object) -> cabc.Iterator[str]:
-    """Validate the whitelist tables; yield advisory warnings."""
+def _validate_whitelist(value: object) -> tuple[str, ...]:
+    """Validate the whitelist tables; return advisory warnings."""
     if value is None:
-        return
+        return ()
     whitelist = _validate.require_table(value, context="tool.skylos.whitelist")
-    names = whitelist.get("names", [])
+    _check_documented(whitelist.get("documented", {}))
+    return _names_warnings(whitelist.get("names", []))
+
+
+def _names_warnings(names: object) -> tuple[str, ...]:
+    """Validate the undocumented ``names`` list and advise against using it."""
     if not _validate.is_sequence(names):
         msg = "tool.skylos.whitelist.names must be an array of strings"
         raise ToolConfigError(msg)
     for index, name in enumerate(names):
         _validate.require_string(name, context=f"tool.skylos.whitelist.names[{index}]")
-    if names:
-        yield (
-            f"tool.skylos.whitelist.names holds {len(names)} entries with no reason; "
-            "prefer documented entries"
-        )
+    if not names:
+        return ()
+    advice = (
+        f"tool.skylos.whitelist.names holds {len(names)} entries with no reason; "
+        "prefer documented entries"
+    )
+    return (advice,)
+
+
+def _check_documented(value: object) -> None:
+    """Require every documented whitelist entry to carry a non-blank reason."""
     documented = _validate.require_table(
-        whitelist.get("documented", {}), context="tool.skylos.whitelist.documented"
+        value, context="tool.skylos.whitelist.documented"
     )
     for symbol, reason in documented.items():
         _validate.require_string(symbol, context="tool.skylos.whitelist.documented key")
@@ -111,29 +128,37 @@ def _validate_whitelist(value: object) -> cabc.Iterator[str]:
         )
 
 
-def _validate_entry_points(value: object) -> cabc.Iterator[str]:
-    """Validate typed runtime entry-point exemptions; yield advisory warnings."""
+def _validate_entry_points(value: object) -> tuple[str, ...]:
+    """Validate typed runtime entry-point exemptions; return advisory warnings."""
     if value is None:
-        return
+        return ()
     dead_code = _validate.require_table(value, context="tool.skylos.dead_code")
     rules = dead_code.get("entrypoints", [])
     if not _validate.is_sequence(rules):
         msg = "tool.skylos.dead_code.entrypoints must be an array of tables"
         raise ToolConfigError(msg)
-    for index, rule in enumerate(rules):
-        context = f"tool.skylos.dead_code.entrypoints[{index}]"
-        table = _validate.require_table(rule, context=context)
-        _validate_rule(table, context=context)
-        if "type" not in table:
-            yield f"{context} has no type; the shared contract expects one"
+    return tuple(
+        warning
+        for index, rule in enumerate(rules)
+        for warning in _check_rule(rule, f"tool.skylos.dead_code.entrypoints[{index}]")
+    )
 
 
-def _validate_rule(table: cabc.Mapping[str, object], *, context: str) -> None:
-    """Validate one entry-point rule's fields, selector and reason."""
+def _check_rule(rule: object, context: str) -> tuple[str, ...]:
+    """Validate one rule; return a warning when it has no ``type``."""
+    table = _validate.require_table(rule, context=context)
     _validate.require_string(table.get("reason"), context=f"{context}.reason")
     for key in _STRING_OR_LIST_KEYS:
         if key in table:
-            _require_string_or_list(table[key], context=f"{context}.{key}")
+            _validate.require_string_or_list(table[key], context=f"{context}.{key}")
+    _require_selector(table, context)
+    if "type" in table:
+        return ()
+    return (f"{context} has no type; the shared contract expects one",)
+
+
+def _require_selector(table: cabc.Mapping[str, object], context: str) -> None:
+    """Require a valid parent selector or one of the native selector keys."""
     parent = table.get("parent")
     if parent is not None:
         _validate_parent(parent, context=f"{context}.parent")
@@ -156,15 +181,4 @@ def _validate_parent(parent: object, *, context: str) -> None:
         )
         raise ToolConfigError(msg)
     for key, value in table.items():
-        _require_string_or_list(value, context=f"{context}.{key}")
-
-
-def _require_string_or_list(value: object, *, context: str) -> None:
-    """Accept a non-blank string or a non-empty array of non-blank strings."""
-    if isinstance(value, str):
-        _validate.require_string(value, context=context)
-        return
-    if not _validate.is_sequence(value) or not value:
-        msg = f"{context} must be a non-empty string or array of strings"
-        raise ToolConfigError(msg)
-    _validate.require_string_tuple(value, context=context)
+        _validate.require_string_or_list(value, context=f"{context}.{key}")
