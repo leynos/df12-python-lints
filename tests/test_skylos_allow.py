@@ -229,8 +229,10 @@ class TestConcurrentAuthoring:
         manifest = _manifest(tmp_path)
         jobs = []
         for n in range(2):
-            jobs.append((manifest, [("skylos", f"s{n}_{i}") for i in range(6)]))
-            jobs.append((manifest, [("allow", f"n{n}_{i}.py") for i in range(6)]))
+            jobs.extend([
+                (manifest, [("skylos", f"s{n}_{i}") for i in range(6)]),
+                (manifest, [("allow", f"n{n}_{i}.py") for i in range(6)]),
+            ])
         run_workers(jobs)
         data = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]
         assert len(data["skylos"]["whitelist"]["documented"]) == 12, "Skylos edits"
