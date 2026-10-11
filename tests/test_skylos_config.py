@@ -199,3 +199,19 @@ class TestScanSettings:
         """The scan interpreter is never defaulted."""
         with pytest.raises(ToolConfigError, match="python"):
             self._load(tmp_path, POLICY.replace('python = "3.12"\n', ""))
+
+    def test_a_root_that_resolves_outside_the_repository_is_rejected(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A symlinked root cannot point the scan at another checkout."""
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        repo = make_repository(tmp_path / "repo", policy=POLICY)
+        (repo / "link").symlink_to(outside, target_is_directory=True)
+        data = tomllib.loads(
+            (repo / "pyproject.toml")
+            .read_text(encoding="utf-8")
+            .replace('roots = ["pkg"]', 'roots = ["link"]')
+        )
+        with pytest.raises(ToolConfigError, match="escapes the repository"):
+            load_scan_settings(data, repository=repo)
