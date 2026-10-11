@@ -61,7 +61,7 @@ def _fetch(url: str) -> bytes:
         ) as response:
             data = response.read(MAX_ARCHIVE_BYTES + 1)
     except (OSError, urllib.error.URLError) as error:
-        _LOG.warning("download url=%s outcome=failed error=%s", url, error)
+        _LOG.warning("download outcome=failed category=%s", type(error).__name__)
         msg = f"cannot download the pinned nose release from GitHub: {error}"
         raise ToolExecutionError(msg) from error
     _LOG.info(

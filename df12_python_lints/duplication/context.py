@@ -36,6 +36,11 @@ type CommandRunner = cabc.Callable[
 ]
 
 
+def _program(command: cabc.Sequence[str]) -> str:
+    """Return the program's file name, which is bounded and free of paths."""
+    return pathlib.PurePath(command[0]).name
+
+
 def run_command(
     command: cabc.Sequence[str],
     cwd: pathlib.Path,
@@ -69,18 +74,20 @@ def run_command(
         msg = f"{command[0]} timed out after {timeout} seconds"
         raise ToolExecutionError(msg) from error
     except UnicodeDecodeError as error:
-        _LOG.debug("subprocess program=%s outcome=undecodable", command[0])
+        _LOG.debug("subprocess program=%s outcome=undecodable", _program(command))
         msg = f"{command[0]} produced output that is not valid UTF-8: {error}"
         raise ToolExecutionError(msg) from error
     except OSError as error:
         _LOG.debug(
-            "subprocess program=%s outcome=cannot-start error=%s", command[0], error
+            "subprocess program=%s outcome=cannot-start category=%s",
+            _program(command),
+            type(error).__name__,
         )
         msg = f"cannot run {command[0]}: {error}"
         raise ToolExecutionError(msg) from error
     _LOG.debug(
         "subprocess program=%s exit_status=%d elapsed_seconds=%.3f",
-        command[0],
+        _program(command),
         result.returncode,
         time.monotonic() - started,
     )
