@@ -68,7 +68,7 @@ def run_command(
     except subprocess.TimeoutExpired as error:
         _LOG.debug(
             "subprocess program=%s outcome=timeout timeout_seconds=%d",
-            command[0],
+            _program(command),
             timeout,
         )
         msg = f"{command[0]} timed out after {timeout} seconds"
