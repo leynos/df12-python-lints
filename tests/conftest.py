@@ -67,3 +67,13 @@ def write_snapshot() -> cabc.Callable[[pathlib.Path, str], pathlib.Path]:
         return path
 
     return _write
+
+
+@pytest.fixture(scope="session")
+def wheel(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
+    """Build the non-editable wheel once per session for installed-command tests."""
+    from wheel_support import UV, build_wheel
+
+    if UV is None:
+        pytest.skip("needs uv to build the wheel")
+    return build_wheel(tmp_path_factory.mktemp("wheel"))

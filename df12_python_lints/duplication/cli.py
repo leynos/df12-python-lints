@@ -32,6 +32,7 @@ import sys
 import typing as typ
 
 from df12_python_lints._errors import ToolConfigError
+from df12_python_lints._runtime import Streams
 
 from . import commands
 from .context import ContextOptions, build_context
@@ -108,7 +109,7 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     if args.command is None:
         parser.print_usage(sys.stderr)
         return commands.EXIT_ERROR
-    streams = commands.Streams(sys.stdout, sys.stderr)
+    streams = Streams(sys.stdout, sys.stderr)
     try:
         context = build_context(
             repository=args.repository,

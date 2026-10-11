@@ -18,3 +18,21 @@ class ToolExecutionError(ToolConfigError):
 
 class ToolPlatformError(ToolExecutionError):
     """Raised when the host platform cannot support the requested operation."""
+
+
+def describe(error: ToolConfigError) -> str:
+    """Render an error for the diagnostic stream.
+
+    Configuration problems are labelled as such; a backend that is missing,
+    wrong or failing is labelled a plain error, since the configuration may be
+    fine.
+
+    Examples
+    --------
+    >>> describe(ToolConfigError("bad key"))
+    'configuration error: bad key'
+    >>> describe(ToolExecutionError("no binary"))
+    'error: no binary'
+    """
+    prefix = "error" if isinstance(error, ToolExecutionError) else "configuration error"
+    return f"{prefix}: {error}"

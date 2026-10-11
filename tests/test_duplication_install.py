@@ -15,9 +15,10 @@ from df12_python_lints._errors import (
     ToolExecutionError,
     ToolPlatformError,
 )
+from df12_python_lints._runtime import Streams
 from df12_python_lints.duplication import context as context_module
 from df12_python_lints.duplication import install
-from df12_python_lints.duplication.commands import Streams, run_install
+from df12_python_lints.duplication.commands import run_install
 
 if typ.TYPE_CHECKING:
     import pathlib

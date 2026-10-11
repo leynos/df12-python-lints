@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import typing as typ
 
-from df12_python_lints._errors import ToolConfigError
+from df12_python_lints._errors import ToolConfigError, describe
 
 from .allowlist import load_allowlist, record_allow_entry
 from .detector import resolve_binary, run_detector
@@ -19,6 +19,8 @@ from .settings import load_settings
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from df12_python_lints._runtime import Streams
 
     from .allowlist import AllowEntry
     from .context import RunContext
@@ -31,13 +33,6 @@ ALLOW_HINT = (
     "df12-duplication allow --member '<path[::name]>' [--member '<path[::name]>' ...] "
     "--reason '<why this stays>'"
 )
-
-
-class Streams(typ.NamedTuple):
-    """Where a command writes its report and its diagnostics."""
-
-    out: typ.TextIO
-    err: typ.TextIO
 
 
 def partition_findings(
@@ -82,7 +77,7 @@ def run_check(context: RunContext, streams: Streams) -> int:
         allowlist = load_allowlist(context.pyproject)
         report = run_detector(settings, context)
     except ToolConfigError as error:
-        print(f"configuration error: {error}", file=streams.err)
+        print(describe(error), file=streams.err)
         return EXIT_ERROR
     blocking, allowed, unmatched = partition_findings(report.findings, allowlist)
     _print_diagnostics(report, unmatched, streams)
@@ -157,7 +152,7 @@ def run_allow(
     try:
         outcome = record_allow_entry(context.pyproject, members=members, reason=reason)
     except ToolConfigError as error:
-        print(f"configuration error: {error}", file=streams.err)
+        print(describe(error), file=streams.err)
         return EXIT_ERROR
     verb = {
         "added": "recorded",
@@ -183,7 +178,7 @@ def run_install(
         settings = load_settings(context.pyproject)
         install_detector(context, version=settings.version, boundary=boundary)
     except ToolConfigError as error:
-        print(f"installation error: {error}", file=streams.err)
+        print(describe(error), file=streams.err)
         return EXIT_ERROR
     return EXIT_OK
 
