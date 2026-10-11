@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+import keyword
+import pathlib
+import tempfile
 import tomllib
-import typing as typ
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from skylos_support import POLICY, make_repository
 from worker_support import run_workers
 
 from df12_python_lints._errors import ToolConfigError
 from df12_python_lints.skylos import cli
 from df12_python_lints.skylos.allow import record_whitelist_entry, validate_symbol
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 
 def _documented(manifest: pathlib.Path) -> dict[str, str]:
@@ -249,3 +250,53 @@ class TestConcurrentAuthoring:
         assert len(data["skylos"]["whitelist"]["documented"]) == 12, "Skylos edits"
         assert len(data["duplication_gate"]["allow"]) == 12, "nose edits"
         assert data["skylos"]["gate"]["strict"] is True, "unrelated policy"
+
+
+_IDENTIFIERS = st.from_regex(r"[A-Za-z_][A-Za-z0-9_]{0,12}", fullmatch=True).filter(
+    lambda name: name.isidentifier() and not keyword.iskeyword(name)
+)
+_REASONS = st.text(min_size=1, max_size=40).filter(lambda text: text.strip() != "")
+
+
+@given(symbol=_IDENTIFIERS)
+def test_every_plain_identifier_is_a_valid_symbol(symbol: str) -> None:
+    """The symbol contract accepts exactly plain identifiers."""
+    assert validate_symbol(symbol) == symbol
+
+
+@given(
+    head=_IDENTIFIERS,
+    junk=st.sampled_from(["*", "?", "[", "]", ".", " ", "-", "\n", "/", "::"]),
+    tail=st.text(alphabet="ab", max_size=3),
+)
+def test_a_name_with_wildcard_or_separator_characters_is_rejected(
+    head: str, junk: str, tail: str
+) -> None:
+    """Wildcards, dots, spaces and separators can never become a symbol."""
+    with pytest.raises(ToolConfigError):
+        validate_symbol(head + junk + tail)
+
+
+@settings(max_examples=30, deadline=None)
+@given(
+    steps=st.lists(st.tuples(_IDENTIFIERS, _REASONS), min_size=1, max_size=8),
+)
+def test_any_authoring_sequence_matches_a_last_write_wins_model(
+    steps: list[tuple[str, str]],
+) -> None:
+    """Replaying requests yields one entry per symbol holding its latest reason."""
+    with tempfile.TemporaryDirectory() as scratch:
+        manifest = _manifest(pathlib.Path(scratch))
+        model: dict[str, str] = {}
+        for symbol, reason in steps:
+            outcome = record_whitelist_entry(manifest, symbol=symbol, reason=reason)
+            expected = (
+                "added"
+                if symbol not in model
+                else "unchanged"
+                if model[symbol] == reason
+                else "updated"
+            )
+            assert outcome == expected, f"{symbol!r}: {outcome} != {expected}"
+            model[symbol] = reason
+        assert _documented(manifest) == model, "the manifest must equal the model"

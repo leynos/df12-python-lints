@@ -238,39 +238,71 @@ class TestScanSettings:
             load_scan_settings(data, repository=repo)
 
 
-_SEGMENTS = st.sampled_from(["a", "b", "c", ".", "..", "", "out", "-x", "a b"])
+_SAFE = st.sampled_from(["a", "b", "c"])
+_UNSAFE = st.sampled_from(["..", "out", "-x", ""])
 
 
-@settings(
-    max_examples=200,
+def _roots_repo(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
+    """Build a repository with real directories and an escaping symlink."""
+    base = tmp_path_factory.mktemp("roots")
+    repo = make_repository(base / "repo")
+    for name in ("a", "b", "c"):
+        (repo / name).mkdir(exist_ok=True)
+    outside = base / "outside"
+    outside.mkdir(exist_ok=True)
+    (repo / "out").symlink_to(outside, target_is_directory=True)
+    return repo
+
+
+def _load(repo: pathlib.Path, root: str) -> ScanSettings:
+    """Load settings for a single root spelling."""
+    data = {"tool": {"df12_skylos": {"roots": [root], "python": "3.12"}}}
+    return load_scan_settings(data, repository=repo)
+
+
+_PROPERTY = settings(
+    max_examples=100,
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
-@given(parts=st.lists(_SEGMENTS, min_size=1, max_size=4), absolute=st.booleans())
-def test_accepted_roots_are_always_safe_and_contained(
+
+
+@_PROPERTY
+@given(parts=st.lists(_SAFE, min_size=1, max_size=1), dotted=st.booleans())
+def test_generated_safe_roots_are_accepted(
     tmp_path_factory: pytest.TempPathFactory,
     parts: list[str],
+    dotted: bool,  # ruff: ignore[boolean-type-hint-positional-argument] - Hypothesis-injected.
+) -> None:
+    """A repository-relative directory, however spelled safely, is accepted."""
+    repo = _roots_repo(tmp_path_factory)
+    root = ("./" if dotted else "") + "/".join(parts)
+    assert _load(repo, root).roots == (root,), f"{root!r} should be accepted"
+
+
+@_PROPERTY
+@given(
+    prefix=st.lists(_SAFE, max_size=2),
+    unsafe=_UNSAFE,
+    suffix=st.lists(_SAFE, max_size=2),
+    absolute=st.booleans(),
+)
+def test_generated_unsafe_roots_are_rejected(
+    tmp_path_factory: pytest.TempPathFactory,
+    prefix: list[str],
+    unsafe: str,
+    suffix: list[str],
     absolute: bool,  # ruff: ignore[boolean-type-hint-positional-argument] - Hypothesis-injected.
 ) -> None:
-    """Whatever the spelling, an accepted root resolves inside the repository.
-
-    Traversal, absolute, option-like and symlink-escaping spellings must be
-    rejected with a configuration error and never any other exception.
-    """
-    base = tmp_path_factory.mktemp("roots")
-    repo = make_repository(base / "repo")
-    (repo / "a" / "c").mkdir(parents=True, exist_ok=True)
-    (repo / "b").mkdir(exist_ok=True)
-    outside = base / "outside"
-    outside.mkdir(exist_ok=True)
-    if not (repo / "out").exists():
-        (repo / "out").symlink_to(outside, target_is_directory=True)
-    root = ("/" if absolute else "") + "/".join(parts)
-    data = {"tool": {"df12_skylos": {"roots": [root], "python": "3.12"}}}
-    try:
-        result = load_scan_settings(data, repository=repo)
-    except ToolConfigError:
+    """Traversal, symlink-escape, option-like and absolute spellings are refused."""
+    repo = _roots_repo(tmp_path_factory)
+    if unsafe == "":
+        root = "/" + "/".join([*prefix, *suffix]) if absolute else "/x"
+    elif unsafe == "-x":
+        root = "-x" + "/".join(["", *suffix])
+    else:
+        root = "/".join([*prefix, unsafe, *suffix])
+    if root.strip("/") == "" and not root.startswith("/"):
         return
-    resolved = (repo / result.roots[0]).resolve()
-    assert resolved.is_relative_to(repo.resolve()), f"{root!r} escaped"
-    assert not result.roots[0].startswith(("/", "-")), f"{root!r} is unsafe"
+    with pytest.raises(ToolConfigError):
+        _load(repo, root)

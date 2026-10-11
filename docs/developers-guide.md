@@ -172,18 +172,18 @@ the first *n* matches) are unchanged.
 by nothing else in the package, so the Pylint plugin and `ambrleaks` load none
 of it.
 
-| Module                        | Responsibility                                                                                  |
-| ----------------------------- | ----------------------------------------------------------------------------------------------- |
-| `cli.py`                      | argparse surface and the explicit context construction                                          |
-| `context.py`                  | `RunContext`, the subprocess boundary and repository resolution                                 |
-| `settings.py`                 | `[tool.nose]` validation                                                                        |
-| `detector.py`                 | binary resolution, argument vector, containment arguments and report adaptation; writes nothing |
-| `schema.py`                   | the consumed report fields and findings                                                         |
-| `policy.py`                   | the pure domain: allow keys, whole-family matching, partition of findings                       |
-| `allowlist.py`                | reading `[[tool.duplication_gate.allow]]` and recording entries                                 |
-| `release.py`, `releases.json` | digest table, URL trust and archive verification                                                |
-| `install.py`                  | explicit, digest-verified, binary-only provisioning                                             |
-| `commands.py`                 | `check`, `allow` and `install`, the exit statuses and the neutral native-configuration files    |
+| Module                        | Responsibility                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `cli.py`                      | argparse surface and the explicit context construction                                                                          |
+| `context.py`                  | `RunContext`: repository, binary override and timeout (the subprocess boundary and repository resolution live in `_runtime.py`) |
+| `settings.py`                 | `[tool.nose]` validation                                                                                                        |
+| `detector.py`                 | binary resolution, argument vector, containment arguments and report adaptation; writes nothing                                 |
+| `schema.py`                   | the consumed report fields and findings                                                                                         |
+| `policy.py`                   | the pure domain: allow keys, whole-family matching, partition of findings                                                       |
+| `allowlist.py`                | reading `[[tool.duplication_gate.allow]]` and recording entries                                                                 |
+| `release.py`, `releases.json` | digest table, URL trust and archive verification                                                                                |
+| `install.py`                  | explicit, digest-verified, binary-only provisioning                                                                             |
+| `commands.py`                 | `check`, `allow` and `install`, the exit statuses and the neutral native-configuration files                                    |
 
 Shared primitives live beside the package root so the Skylos command can reuse
 them: `_manifest.py` (the comment-preserving edit transaction and its single
