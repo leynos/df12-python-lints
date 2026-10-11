@@ -134,10 +134,10 @@ def require_integer(value: object, *, context: str, minimum: int) -> int:
 
 
 def require_reason(value: object, *, context: str) -> str:
-    """Validate a human-readable reason: non-blank, with no control characters.
+    r"""Validate a human-readable reason: non-blank, with no control characters.
 
     Newlines and tabs are allowed. Other control characters cannot be written
-    portably: TOML 1.1 spells ESC ``\\e``, which Python's ``tomllib`` cannot
+    portably: TOML 1.1 spells ESC ``\e``, which Python's ``tomllib`` cannot
     read back, so such a reason would corrupt the manifest it was recorded in.
 
     Raises
