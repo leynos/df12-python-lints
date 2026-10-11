@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import tempfile
 import tomllib
 import typing as typ
 
@@ -394,3 +395,61 @@ class TestEntryPoint:
         assert raised.value.code == 0
         out = capsys.readouterr().out
         assert all(word in out for word in ("check", "allow", "install"))
+
+
+class TestEnvironmentalFailures:
+    """Expected environmental failures are exit two, never a traceback."""
+
+    @pytest.mark.parametrize("command", [["check"], ["install"]])
+    def test_a_manifest_that_is_not_utf8_exits_two(
+        self,
+        tmp_path: pathlib.Path,
+        command: list[str],
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Invalid UTF-8 in ``pyproject.toml`` is a configuration error."""
+        repo = make_repository(tmp_path / "repo")
+        (repo / "pyproject.toml").write_bytes(b"[project]\nname = '\xff\xfe'\n")
+        assert cli.main([*command, "--repository", str(repo), "--binary", "n"]) == 2
+        err = capsys.readouterr().err
+        assert "cannot read" in err or "cannot load" in err
+        assert "Traceback" not in err
+
+    def test_scratch_directory_failure_exits_two(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """If the scratch files cannot be created the gate fails closed."""
+        repo = make_repository(tmp_path / "repo")
+        write_fake_nose(repo / "n", Script(stdout=report()))
+
+        def refuse(*_args: object, **_kwargs: object) -> None:
+            """Simulate a full or read-only temporary directory."""
+            msg = "no space left"
+            raise OSError(msg)
+
+        monkeypatch.setattr(tempfile, "TemporaryDirectory", refuse)
+        assert cli.main(["check", "--repository", str(repo), "--binary", "n"]) == 2
+        assert "cannot prepare the scratch files" in capsys.readouterr().err
+
+    def test_a_failure_is_logged_with_its_category(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The operation record names the failure category and the detector."""
+        monkeypatch.setattr(_log.logger, "handlers", list(_log.logger.handlers))
+        monkeypatch.setattr(_log.logger, "level", logging.NOTSET)
+        caplog.set_level(logging.DEBUG, logger="df12_python_lints")
+        repo = make_repository(tmp_path / "repo")
+        write_fake_nose(repo / "n", Script(stdout=report(), version="nose 9.9.9"))
+        cli.main(["check", "--repository", str(repo), "--binary", "n"])
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("failure category=ToolExecutionError" in m for m in messages)
+        write_fake_nose(repo / "n", Script(stdout=report(family(_A, _B))))
+        cli.main(["check", "--repository", str(repo), "--binary", "n"])
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("detector=nose-0.20.0" in m and "blocking=1" in m for m in messages)

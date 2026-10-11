@@ -1,0 +1,5 @@
+exit: 0
+--- stdout
+duplication gate passed (nose 0.20.0)
+--- stderr
+allow entry (src/z.py) is unmatched in this scan: ranking, the report budget, thresholds, file selection or a changed family can all cause this. Review it; it is not removed automatically.

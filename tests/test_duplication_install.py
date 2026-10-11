@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import io
+import pathlib
 import tarfile
-import typing as typ
 
 import pytest
 from duplication_support import PINNED, make_repository, nose_table
@@ -18,9 +18,6 @@ from df12_python_lints._errors import (
 from df12_python_lints.duplication import context as context_module
 from df12_python_lints.duplication import install
 from df12_python_lints.duplication.commands import Streams, run_install
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 _LINUX = install.HostPlatform("Linux", "x86_64", "glibc")
 _SCRIPT = f"#!/bin/sh\necho 'nose {PINNED}'\n".encode()
@@ -340,3 +337,21 @@ class TestInstallation:
         streams = Streams(__import__("sys").stdout, __import__("sys").stderr)
         assert run_install(context, boundary=boundary, streams=streams) == 2
         assert "no approved release digests" in capsys.readouterr().err
+
+
+def test_a_staging_write_failure_is_a_tool_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An executable that cannot be staged for its version check fails cleanly."""
+    context = context_module.build_context(
+        repository=str(make_repository(tmp_path / "repo")), binary=None, environment={}
+    )
+
+    def refuse(self: pathlib.Path, _data: bytes) -> int:
+        """Simulate a full scratch directory."""
+        msg = "no space left"
+        raise OSError(msg)
+
+    monkeypatch.setattr(pathlib.Path, "write_bytes", refuse)
+    with pytest.raises(ToolExecutionError, match="cannot stage"):
+        install._prove_version(b"x", PINNED, context)

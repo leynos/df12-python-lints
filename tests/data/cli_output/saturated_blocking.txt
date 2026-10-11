@@ -1,0 +1,8 @@
+exit: 1
+--- stdout
+duplicate code: 1 unsuppressed family/families
+  src/a.py:1-20 parse ~ src/b.py:1-20 parse (copy-paste, value 22.1)
+Extract the shared logic into one helper, or record a considered exception that names every location in the family:
+  df12-duplication allow --member '<path[::name]>' [--member '<path[::name]>' ...] --reason '<why this stays>'
+--- stderr
+report budget saturated: nose returned 1 of 40 families, and allowed families consume budget places, so families beyond the budget are not enforced. Raise tool.nose.top, or set it to 0 for every family, as a reviewed policy change.

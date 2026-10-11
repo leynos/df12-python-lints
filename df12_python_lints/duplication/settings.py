@@ -103,7 +103,7 @@ def _read_toml(path: pathlib.Path) -> cabc.Mapping[str, object]:
     try:
         with path.open("rb") as handle:
             return tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as error:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         msg = f"cannot read {path}: {error}"
         raise ToolConfigError(msg) from error
 

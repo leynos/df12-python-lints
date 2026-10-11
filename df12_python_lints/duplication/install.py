@@ -146,10 +146,21 @@ def _reports(binary: pathlib.Path, version: str, context: RunContext) -> bool:
 
 def _prove_version(payload: bytes, version: str, context: RunContext) -> None:
     """Run the verified payload from a scratch directory before installing it."""
-    with tempfile.TemporaryDirectory(prefix="df12-duplication-install-") as scratch:
+    with tempfile.TemporaryDirectory(
+        prefix="df12-duplication-install-", ignore_cleanup_errors=True
+    ) as scratch:
         candidate = pathlib.Path(scratch) / "nose"
-        candidate.write_bytes(payload)
-        candidate.chmod(0o755)
+        _stage(candidate, payload)
         if not _reports(candidate, version, context):
             msg = f"the verified executable does not report 'nose {version}'"
             raise ToolExecutionError(msg)
+
+
+def _stage(candidate: pathlib.Path, payload: bytes) -> None:
+    """Write the executable into the scratch directory, translating I/O errors."""
+    try:
+        candidate.write_bytes(payload)
+        candidate.chmod(0o755)
+    except OSError as error:
+        msg = f"cannot stage the verified executable for its version check: {error}"
+        raise ToolExecutionError(msg) from error

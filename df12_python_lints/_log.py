@@ -34,6 +34,16 @@ def configure(*, verbose: bool) -> None:
     logger.setLevel(logging.DEBUG)
 
 
+def failure(operation: str, error: Exception) -> None:
+    """Log an expected failure with its category (the exception class)."""
+    logger.warning(
+        "operation=%s failure category=%s message=%s",
+        operation,
+        type(error).__name__,
+        error,
+    )
+
+
 def observe(
     operation: str, repository: pathlib.Path, run: cabc.Callable[[], int]
 ) -> int:
