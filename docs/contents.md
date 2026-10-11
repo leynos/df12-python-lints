@@ -21,6 +21,9 @@ documentation set.
 - [Duplication gate migration guide](duplication-gate-migration.md) explains
   how to move a vendored nose gate onto the installed `df12-duplication`
   command, with the command mapping and a deletion checklist.
+- [ADR 002](adr-002-df12-duplication-command.md) records the boundaries, shared
+  primitives, locking, installer verification and Python 3.12 decisions of the
+  `df12-duplication` command.
 - [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 

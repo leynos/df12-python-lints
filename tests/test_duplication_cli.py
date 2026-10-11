@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import tomllib
 import typing as typ
@@ -16,6 +17,7 @@ from duplication_support import (
     write_fake_nose,
 )
 
+from df12_python_lints import _log
 from df12_python_lints.duplication import cli
 
 if typ.TYPE_CHECKING:
@@ -156,6 +158,100 @@ def _check(tmp_path: pathlib.Path, stdout: str, *, extra: str = "") -> int:
     repo = make_repository(tmp_path / "repo", extra=extra)
     write_fake_nose(repo / "n", Script(stdout=stdout))
     return cli.main(["check", "--repository", str(repo), "--binary", "n"])
+
+
+class TestSaturation:
+    """A capped report that hides families can never pass."""
+
+    def test_saturated_report_with_everything_allowed_fails_closed(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Episodic's case: every returned family is allowed, 40 exist."""
+        extra = (
+            "[[tool.duplication_gate.allow]]\n"
+            'members = ["src/a.py::parse", "src/b.py::parse"]\nreason = "r"\n'
+        )
+        assert _check(tmp_path, report(family(_A, _B), total=40), extra=extra) == 2
+        assert "cannot prove a clean scan" in capsys.readouterr().err
+
+    def test_unsaturated_report_with_everything_allowed_still_passes(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """When every family was returned, allowed families pass."""
+        extra = (
+            "[[tool.duplication_gate.allow]]\n"
+            'members = ["src/a.py::parse", "src/b.py::parse"]\nreason = "r"\n'
+        )
+        assert _check(tmp_path, report(family(_A, _B)), extra=extra) == 0
+
+
+class TestObservability:
+    """Operations and subprocesses are logged on request, and silent otherwise."""
+
+    def test_verbose_logs_the_operation_and_the_subprocess(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """One record per operation carries scope, outcome and elapsed time."""
+        monkeypatch.setattr(_log.logger, "handlers", list(_log.logger.handlers))
+        monkeypatch.setattr(_log.logger, "level", logging.NOTSET)
+        caplog.set_level(logging.DEBUG, logger="df12_python_lints")
+        repo = make_repository(tmp_path / "repo")
+        write_fake_nose(repo / "n", Script(stdout=report(family(_A, _B))))
+        cli.main(["--verbose", "check", "--repository", str(repo), "--binary", "n"])
+        messages = [record.getMessage() for record in caplog.records]
+        operation = next(m for m in messages if m.startswith("operation=check"))
+        assert f"repository={repo.resolve()}" in operation
+        assert "outcome=blocking" in operation
+        assert "elapsed_seconds=" in operation
+        assert any(m.startswith("subprocess program=") for m in messages)
+
+    def test_default_runs_attach_no_handler(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without ``--verbose`` the command adds no handler and stays quiet."""
+        monkeypatch.setattr(_log.logger, "handlers", [logging.NullHandler()])
+        repo = make_repository(tmp_path / "repo")
+        write_fake_nose(repo / "n", Script(stdout=report()))
+        cli.main(["check", "--repository", str(repo), "--binary", "n"])
+        kinds = [type(handler) for handler in _log.logger.handlers]
+        assert kinds == [logging.NullHandler]
+
+
+class TestEncoding:
+    """Detector output is UTF-8 whatever the process locale says."""
+
+    def test_non_ascii_paths_still_match_exceptions_under_the_c_locale(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A report path such as ``é.py`` is decoded as UTF-8 and matches."""
+        monkeypatch.setenv("LC_ALL", "C")
+        monkeypatch.setenv("LANG", "C")
+        extra = (
+            "[[tool.duplication_gate.allow]]\n"
+            'members = ["src/é.py", "src/ü.py"]\nreason = "unicode names"\n'
+        )
+        found = family(location("src/é.py"), location("src/ü.py"))
+        assert _check(tmp_path, report(found), extra=extra) == 0
+
+    def test_undecodable_detector_output_exits_two(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Bytes that are not UTF-8 are a failed analysis, not status one."""
+        repo = make_repository(tmp_path / "repo")
+        script = repo / "n"
+        script.write_text(
+            "#!/bin/sh\n"
+            'if [ "$1" = "--version" ]; then echo "nose 0.20.0"; exit 0; fi\n'
+            "printf '\\377\\376'\n",
+            encoding="utf-8",
+        )
+        script.chmod(0o755)
+        code = cli.main(["check", "--repository", str(repo), "--binary", "n"])
+        assert code == 2
+        assert "not valid UTF-8" in capsys.readouterr().err
 
 
 class TestAllow:

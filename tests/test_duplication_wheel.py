@@ -20,7 +20,12 @@ from duplication_support import Script, make_repository, report, write_fake_nose
 
 _UV = shutil.which("uv")
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
-pytestmark = pytest.mark.skipif(_UV is None, reason="needs uv to build and install")
+pytestmark = [
+    pytest.mark.skipif(_UV is None, reason="needs uv to build and install"),
+    # Each test builds, creates a venv and installs; a cold cache exceeds the
+    # suite-wide 30 s limit, so match the subprocess bounds instead.
+    pytest.mark.timeout(900),
+]
 _PYTHONS = ["3.12", "3.14"]
 
 if typ.TYPE_CHECKING:

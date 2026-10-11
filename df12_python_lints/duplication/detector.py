@@ -19,10 +19,10 @@ are documented as such rather than disabled.
 
 from __future__ import annotations
 
+import dataclasses as dc
 import json
 import pathlib
 import shutil
-import tempfile
 import typing as typ
 
 from df12_python_lints._errors import ToolConfigError, ToolExecutionError
@@ -39,6 +39,25 @@ INSTALL_HINT = "run `df12-duplication install` to install the pinned detector"
 # nose reports a root with no scannable source as a warning on a zero exit.
 _EMPTY_SOURCE_MARKER = "no supported source files found under:"
 _EMPTY_IGNORE_FILE = '{"ignores": []}\n'
+
+
+@dc.dataclass(frozen=True, slots=True)
+class NeutralFiles:
+    """Empty native configuration and ignore files for one detector query.
+
+    The command boundary owns their lifecycle (see
+    :func:`write_neutral_files`); the detector adapter only passes them on.
+
+    Attributes
+    ----------
+    config_file : pathlib.Path
+        An empty file given as ``--config``.
+    ignore_file : pathlib.Path
+        A file with no ignores given as ``--ignore-file``.
+    """
+
+    config_file: pathlib.Path
+    ignore_file: pathlib.Path
 
 
 def resolve_binary(settings: NoseSettings, context: RunContext) -> str:
@@ -88,11 +107,7 @@ def _find_binary(context: RunContext) -> pathlib.Path | None:
 
 
 def build_command(
-    binary: str,
-    settings: NoseSettings,
-    *,
-    config_file: pathlib.Path,
-    ignore_file: pathlib.Path,
+    binary: str, settings: NoseSettings, neutral: NeutralFiles
 ) -> list[str]:
     """Build the ``nose query`` argument vector for the configured policy.
 
@@ -102,7 +117,7 @@ def build_command(
         Verified binary path.
     settings : NoseSettings
         The consumer's detector policy.
-    config_file, ignore_file : pathlib.Path
+    neutral : NeutralFiles
         Empty native configuration and ignore files that stop ambient
         ``nose.toml`` and ``nose.ignore.json`` files taking effect.
 
@@ -122,13 +137,25 @@ def build_command(
     command.extend(("--mode", settings.mode, "--min-size", str(settings.min_size)))
     for glob in settings.exclude:
         command.extend(("--exclude", glob))
-    command.extend(("--config", str(config_file), "--ignore-file", str(ignore_file)))
+    command.extend(("--config", str(neutral.config_file)))
+    command.extend(("--ignore-file", str(neutral.ignore_file)))
     command.extend(("--format", "json"))
     return command
 
 
-def run_detector(settings: NoseSettings, context: RunContext) -> DetectorReport:
+def run_detector(
+    settings: NoseSettings, context: RunContext, neutral: NeutralFiles
+) -> DetectorReport:
     """Run the pinned detector once over every root and normalize its report.
+
+    Parameters
+    ----------
+    settings : NoseSettings
+        The consumer's detector policy.
+    context : RunContext
+        The explicit repository, environment and subprocess boundary.
+    neutral : NeutralFiles
+        Empty native configuration and ignore files, owned by the caller.
 
     Raises
     ------
@@ -140,14 +167,12 @@ def run_detector(settings: NoseSettings, context: RunContext) -> DetectorReport:
         contained no supported source files.
     """
     binary = resolve_binary(settings, context)
-    with tempfile.TemporaryDirectory(prefix="df12-duplication-") as scratch:
-        config_file, ignore_file = _write_neutral_files(pathlib.Path(scratch))
-        command = build_command(
-            binary, settings, config_file=config_file, ignore_file=ignore_file
-        )
-        result = context.runner(
-            command, context.repository, context.environment, context.timeout_seconds
-        )
+    result = context.runner(
+        build_command(binary, settings, neutral),
+        context.repository,
+        context.environment,
+        context.timeout_seconds,
+    )
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip()
         msg = f"{binary} exited with status {result.returncode}: {detail}"
@@ -161,13 +186,13 @@ def run_detector(settings: NoseSettings, context: RunContext) -> DetectorReport:
     return normalize_report(report)
 
 
-def _write_neutral_files(directory: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
-    """Create the empty native configuration and ignore files for one run."""
+def write_neutral_files(directory: pathlib.Path) -> NeutralFiles:
+    """Create the empty native configuration and ignore files in ``directory``."""
     config_file = directory / "empty-nose.toml"
     ignore_file = directory / "empty-nose.ignore.json"
     config_file.write_text("", encoding="utf-8")
     ignore_file.write_text(_EMPTY_IGNORE_FILE, encoding="utf-8")
-    return config_file, ignore_file
+    return NeutralFiles(config_file, ignore_file)
 
 
 def _reject_empty_sources(stderr: str) -> None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import pathlib
+import tempfile
 import typing as typ
 
 import pytest
@@ -17,13 +19,27 @@ from duplication_support import (
 )
 
 from df12_python_lints._errors import ToolConfigError, ToolExecutionError
+from df12_python_lints.duplication import commands
 from df12_python_lints.duplication import context as context_module
-from df12_python_lints.duplication.detector import resolve_binary, run_detector
+from df12_python_lints.duplication.detector import (
+    resolve_binary,
+    run_detector,
+    write_neutral_files,
+)
 from df12_python_lints.duplication.settings import load_settings
 
 if typ.TYPE_CHECKING:
     from df12_python_lints.duplication.schema import DetectorReport
     from df12_python_lints.duplication.settings import NoseSettings
+
+
+def _detect(
+    settings: NoseSettings, context: context_module.RunContext
+) -> DetectorReport:
+    """Run the detector with neutral files owned by the test, as the command would."""
+    with tempfile.TemporaryDirectory() as scratch:
+        neutral = write_neutral_files(pathlib.Path(scratch))
+        return run_detector(settings, context, neutral)
 
 
 def _prepared(
@@ -68,7 +84,7 @@ class TestCommandConstruction:
             options=context_module.ContextOptions(runner=runner),
         )
         (repo / "n").write_text("", encoding="utf-8")
-        run_detector(load_settings(context.pyproject), context)
+        _detect(load_settings(context.pyproject), context)
         argv = runner.query_argv
         assert argv[1:5] == ["query", "--root", "src", "--root"], argv
         assert argv.count("query") == 1, "exactly one query"
@@ -85,7 +101,7 @@ class TestCommandConstruction:
         """``all`` and ``top=N`` terms are emitted as query terms."""
         runner = FakeRunner(query_stdout=report())
         context, settings = _prepared(tmp_path, runner)
-        run_detector(settings, context)
+        _detect(settings, context)
         argv = runner.query_argv
         assert "all" in argv, argv
         assert "top=30" in argv, argv
@@ -95,15 +111,16 @@ class TestCommandConstruction:
     ) -> None:
         """Empty --config and --ignore-file stop ambient files taking effect."""
         runner = FakeRunner(query_stdout=report())
-        context, settings = _prepared(tmp_path, runner)
-        run_detector(settings, context)
+        context, _ = _prepared(tmp_path, runner)
+        streams = commands.Streams(io.StringIO(), io.StringIO())
+        assert commands.run_check(context, streams) == 0
         assert sorted(runner.neutral_files) == [
             ("--config", ""),
             ("--ignore-file", '{"ignores": []}\n'),
         ]
         argv = runner.query_argv
         scratch = pathlib.Path(argv[argv.index("--config") + 1])
-        assert not scratch.exists(), "scratch files are removed after the run"
+        assert not scratch.exists(), "the command removes the scratch files after"
         assert context.repository not in scratch.parents, (
             "neutral files live outside the checkout"
         )
@@ -124,7 +141,7 @@ class TestCommandConstruction:
             environment={},
             options=context_module.ContextOptions(runner=runner),
         )
-        run_detector(load_settings(context.pyproject), context)
+        _detect(load_settings(context.pyproject), context)
         assert "$(touch pwned) `x` 'q' é" in runner.query_argv, "literal argument"
         assert not (repo / "pwned").exists()
 
@@ -209,7 +226,7 @@ class TestFailuresNeverPass:
     def _run(self, tmp_path: pathlib.Path, runner: FakeRunner) -> DetectorReport:
         """Run the detector with a scripted runner."""
         context, settings = _prepared(tmp_path, runner)
-        return run_detector(settings, context)
+        return _detect(settings, context)
 
     def test_nonzero_exit_includes_stderr(self, tmp_path: pathlib.Path) -> None:
         """A failing detector surfaces its diagnostics."""
@@ -270,6 +287,18 @@ class TestFailuresNeverPass:
         with pytest.raises(ToolExecutionError, match="timed out after 1 seconds"):
             context_module.run_command(
                 [str(script)], tmp_path, {"PATH": "/bin:/usr/bin"}, 1
+            )
+
+    def test_output_that_is_not_utf8_is_a_tool_error(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Undecodable bytes are exit-two material, never an unhandled traceback."""
+        script = tmp_path / "garbage.sh"
+        script.write_text("#!/bin/sh\nprintf '\\377\\376'\n", encoding="utf-8")
+        script.chmod(0o755)
+        with pytest.raises(ToolExecutionError, match="not valid UTF-8"):
+            context_module.run_command(
+                [str(script)], tmp_path, {"PATH": "/bin:/usr/bin"}, 5
             )
 
     def test_unrunnable_binary_is_reported(self, tmp_path: pathlib.Path) -> None:

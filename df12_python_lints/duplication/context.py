@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import collections.abc as cabc
 import dataclasses as dc
+import logging
 import pathlib
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - runs one verified, repository-selected binary without a shell.
+import time
 
 from df12_python_lints._errors import ToolConfigError, ToolExecutionError
 
 DEFAULT_TIMEOUT_SECONDS = 120
+_LOG = logging.getLogger("df12_python_lints.subprocess")
 DEFAULT_BINARY_RELATIVE = pathlib.PurePosixPath(".tools/nose/nose")
 
 
@@ -46,6 +49,7 @@ def run_command(
     ToolExecutionError
         If the program cannot start or exceeds the timeout.
     """
+    started = time.monotonic()
     try:
         result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argument vector, no shell.
             list(command),
@@ -53,15 +57,29 @@ def run_command(
             env=dict(environment),
             check=False,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as error:
+        _LOG.debug(
+            "subprocess program=%s outcome=timeout timeout_seconds=%d",
+            command[0],
+            timeout,
+        )
         msg = f"{command[0]} timed out after {timeout} seconds"
+        raise ToolExecutionError(msg) from error
+    except UnicodeDecodeError as error:
+        msg = f"{command[0]} produced output that is not valid UTF-8: {error}"
         raise ToolExecutionError(msg) from error
     except OSError as error:
         msg = f"cannot run {command[0]}: {error}"
         raise ToolExecutionError(msg) from error
+    _LOG.debug(
+        "subprocess program=%s exit_status=%d elapsed_seconds=%.3f",
+        command[0],
+        result.returncode,
+        time.monotonic() - started,
+    )
     return CommandResult(result.returncode, result.stdout, result.stderr)
 
 

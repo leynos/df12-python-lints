@@ -102,32 +102,45 @@ def normalize_report(report: object) -> DetectorReport:
         If the report does not match the consumed schema.
     """
     table = _validate.require_table(report, context="nose report")
-    version = table.get("schema_version")
+    _require_schema_version(table.get("schema_version"))
+    total, shown = _summary_counts(table.get("summary"))
+    findings = _findings(table.get("families"), shown=shown)
+    return DetectorReport(findings, total=total, shown=shown)
+
+
+def _require_schema_version(version: object) -> None:
+    """Fail closed on a report schema this gate was not written against."""
     if version not in SUPPORTED_SCHEMA_VERSIONS:
         msg = f"nose report schema_version {version!r} is not supported"
         raise ToolConfigError(msg)
-    summary = _validate.require_table(
-        table.get("summary"), context="nose report summary"
-    )
+
+
+def _summary_counts(raw: object) -> tuple[int, int]:
+    """Return ``(families found, families shown)`` from the report summary."""
+    summary = _validate.require_table(raw, context="nose report summary")
     total = _validate.require_integer(
         summary.get("families"), context="nose report summary.families", minimum=0
     )
     shown = _validate.require_integer(
         summary.get("shown"), context="nose report summary.shown", minimum=0
     )
-    families = table.get("families")
-    if not _validate.is_sequence(families):
+    return total, shown
+
+
+def _findings(raw: object, *, shown: int) -> tuple[Finding, ...]:
+    """Validate every family and order them by value, then location."""
+    if not _validate.is_sequence(raw):
         msg = "nose report families must be an array"
         raise ToolConfigError(msg)
     findings = [
         _finding(family, context=f"nose report families[{index}]")
-        for index, family in enumerate(families)
+        for index, family in enumerate(raw)
     ]
     if len(findings) != shown:
         msg = f"nose report lists {len(findings)} families but summary.shown is {shown}"
         raise ToolConfigError(msg)
     findings.sort(key=lambda finding: (-finding.value, finding.label))
-    return DetectorReport(tuple(findings), total=total, shown=shown)
+    return tuple(findings)
 
 
 def _finding(raw: object, *, context: str) -> Finding:

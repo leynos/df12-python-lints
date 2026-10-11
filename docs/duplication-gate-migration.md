@@ -27,8 +27,10 @@ one or many members need no splitting.
 - The stale-entry message is now *unmatched in this scan*, and explains that
   ranking, thresholds, selection or a grown family can cause it. Entries are
   never deleted or widened automatically.
-- Report-budget saturation is reported. Enforcement is unchanged until a
-  repository sets `top = 0` as a reviewed policy change.
+- A saturated report budget with nothing blocking now fails closed (status 2)
+  instead of passing, because unseen families would go unchecked. Migrating a
+  repository whose report is saturated (Episodic returns 30 of 161 families)
+  needs `top = 0` and adjudication of the newly visible families.
 - Ambient `nose.toml`, `.nose.toml` and `nose.ignore.json` files are ignored.
 - One lock protocol covers `allow` for both df12 commands.
 

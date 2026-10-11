@@ -27,7 +27,7 @@ _COUNT = 4000
 def _answer(path: str, pattern: str) -> bool | str:
     """Return the native answer, or the name of the exception it raises."""
     try:
-        return pathlib.PurePosixPath(path).full_match(pattern)  # ty: ignore[unresolved-attribute]
+        return pathlib.PurePosixPath(path).full_match(pattern)  # ty: ignore[unresolved-attribute] - run on 3.13+, absent from the 3.12 stubs
     except Exception as error:  # ruff: ignore[blind-except] - recording the exception type is the point.
         return type(error).__name__
 

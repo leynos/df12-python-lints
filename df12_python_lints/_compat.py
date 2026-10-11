@@ -12,8 +12,12 @@ from __future__ import annotations
 import sys
 
 if sys.version_info >= (3, 13):
-    from typing import TypeIs  # ruff: ignore[banned-import-from]
+    import typing as typ
+
+    TypeIs = typ.TypeIs
 else:
-    from typing_extensions import TypeIs
+    import typing_extensions as typ_ext
+
+    TypeIs = typ_ext.TypeIs
 
 __all__ = ["TypeIs"]

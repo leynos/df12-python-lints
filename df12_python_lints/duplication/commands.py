@@ -8,20 +8,24 @@ invocation or configuration or a failed analysis.
 
 from __future__ import annotations
 
+import contextlib
+import pathlib
+import tempfile
 import typing as typ
 
 from df12_python_lints._errors import ToolConfigError
 
 from .allowlist import load_allowlist, record_allow_entry
-from .detector import resolve_binary, run_detector
+from .detector import NeutralFiles, resolve_binary, run_detector, write_neutral_files
 from .install import InstallBoundary, install_detector
+from .policy import partition_findings
 from .settings import load_settings
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from .allowlist import AllowEntry
     from .context import RunContext
+    from .policy import AllowEntry
     from .schema import DetectorReport, Finding
 
 EXIT_OK = 0
@@ -40,32 +44,18 @@ class Streams(typ.NamedTuple):
     err: typ.TextIO
 
 
-def partition_findings(
-    findings: cabc.Sequence[Finding], allowlist: cabc.Sequence[AllowEntry]
-) -> tuple[list[Finding], list[Finding], list[AllowEntry]]:
-    """Split findings into blocking and allowed, and find unmatched entries.
+@contextlib.contextmanager
+def _neutral_files() -> cabc.Iterator[NeutralFiles]:
+    """Own the lifecycle of the empty native configuration files for one query.
 
-    Returns
-    -------
-    tuple[list[Finding], list[Finding], list[AllowEntry]]
-        Blocking findings, findings silenced by an entry covering every one
-        of their locations, and entries that matched no finding in this scan.
+    Yields
+    ------
+    NeutralFiles
+        Empty ``--config`` and ``--ignore-file`` files in a scratch directory
+        outside the checkout, removed when the query ends.
     """
-    blocking: list[Finding] = []
-    allowed: list[Finding] = []
-    used: set[int] = set()
-    for finding in findings:
-        matched = {
-            position
-            for position, entry in enumerate(allowlist)
-            if entry.matches(finding)
-        }
-        used |= matched
-        (allowed if matched else blocking).append(finding)
-    unmatched = [
-        entry for position, entry in enumerate(allowlist) if position not in used
-    ]
-    return blocking, allowed, unmatched
+    with tempfile.TemporaryDirectory(prefix="df12-duplication-") as scratch:
+        yield write_neutral_files(pathlib.Path(scratch))
 
 
 def run_check(context: RunContext, streams: Streams) -> int:
@@ -80,12 +70,25 @@ def run_check(context: RunContext, streams: Streams) -> int:
     try:
         settings = load_settings(context.pyproject)
         allowlist = load_allowlist(context.pyproject)
-        report = run_detector(settings, context)
+        with _neutral_files() as neutral:
+            report = run_detector(settings, context, neutral)
     except ToolConfigError as error:
         print(f"configuration error: {error}", file=streams.err)
         return EXIT_ERROR
     blocking, allowed, unmatched = partition_findings(report.findings, allowlist)
     _print_diagnostics(report, unmatched, streams)
+    if report.is_saturated and not blocking:
+        # A capped report that shows nothing blocking cannot prove the rest is
+        # clean: allowed families consume the budget, so unseen ones go
+        # unchecked. Fail closed rather than pass.
+        print(
+            f"error: the gate cannot prove a clean scan: nose reported "
+            f"{report.total} families but returned only {report.shown}. Set "
+            "tool.nose.top = 0 (every family) or raise it above the total, "
+            "adjudicating any newly visible families.",
+            file=streams.err,
+        )
+        return EXIT_ERROR
     return _print_outcome(blocking, allowed, settings.version, streams)
 
 

@@ -303,6 +303,26 @@ class TestInstallation:
             install.install_detector(context, version=PINNED, boundary=boundary)
         assert not urls, "nothing may be downloaded"
 
+    def test_an_uncreatable_destination_is_a_tool_error(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A destination whose parent is a file fails cleanly, not with a traceback."""
+        archive = _good()
+        repo = make_repository(tmp_path / "repo")
+        (repo / "blocker").write_text("a file, not a directory", encoding="utf-8")
+        context = context_module.build_context(
+            repository=str(repo), binary="blocker/nose", environment={}
+        )
+        monkeypatch.setattr(
+            install,
+            "release_digests",
+            lambda _v: {"x86_64-unknown-linux-gnu": _sha(archive)},
+        )
+        with pytest.raises(ToolExecutionError, match="cannot install nose"):
+            install.install_detector(
+                context, version=PINNED, boundary=self._boundary(archive, [], [])
+            )
+
     def test_command_reports_failures_as_exit_two(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
     ) -> None:

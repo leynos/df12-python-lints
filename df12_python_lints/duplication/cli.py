@@ -32,6 +32,7 @@ import sys
 import typing as typ
 
 from df12_python_lints._errors import ToolConfigError
+from df12_python_lints._log import configure, observe
 
 from . import commands
 from .context import ContextOptions, build_context
@@ -39,6 +40,8 @@ from .install import HostPlatform, InstallBoundary
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from .context import RunContext
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--version", action="store_true", help="print the version and exit"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="log each operation and subprocess to standard error",
     )
     commands = parser.add_subparsers(dest="command")
     for name, summary in (
@@ -102,6 +110,7 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+    configure(verbose=args.verbose)
     if args.version:
         print(f"df12-duplication {importlib.metadata.version('df12-python-lints')}")
         return commands.EXIT_OK
@@ -119,12 +128,29 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     except ToolConfigError as error:
         print(f"configuration error: {error}", file=sys.stderr)
         return commands.EXIT_ERROR
+    return _dispatch(args, context, streams)
+
+
+def _dispatch(
+    args: argparse.Namespace, context: RunContext, streams: commands.Streams
+) -> int:
+    """Run the selected operation and log its outcome."""
     if args.command == "check":
-        return commands.run_check(context, streams)
+        return observe(
+            "check", context.repository, lambda: commands.run_check(context, streams)
+        )
     if args.command == "install":
         boundary = InstallBoundary(HostPlatform.detect())
-        return commands.run_install(context, boundary=boundary, streams=streams)
+        return observe(
+            "install",
+            context.repository,
+            lambda: commands.run_install(context, boundary=boundary, streams=streams),
+        )
     members = [*args.member, *([args.first] if args.first else []), *args.second]
-    return commands.run_allow(
-        context, members=members, reason=args.reason, streams=streams
+    return observe(
+        "allow",
+        context.repository,
+        lambda: commands.run_allow(
+            context, members=members, reason=args.reason, streams=streams
+        ),
     )

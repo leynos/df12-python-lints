@@ -45,7 +45,8 @@ def _port(path: str, pattern: str) -> bool:
 
 def _corpus_rows() -> list[tuple[str, str, bool | str]]:
     """Load the pinned 3.14 answers."""
-    return [tuple(row) for row in json.loads(_CORPUS.read_text(encoding="utf-8"))]  # type: ignore[misc]
+    rows = json.loads(_CORPUS.read_text(encoding="utf-8"))
+    return [(path, pattern, answer) for path, pattern, answer in rows]
 
 
 class TestPortAgainstCorpus:
@@ -110,7 +111,7 @@ class TestDifferential:
     @given(path=_paths, pattern=_patterns)
     def test_port_matches_native(self, path: str, pattern: str) -> None:
         """Same answer for every generated path and pattern."""
-        native = pathlib.PurePosixPath(path).full_match(pattern)  # ty: ignore[unresolved-attribute]
+        native = pathlib.PurePosixPath(path).full_match(pattern)  # ty: ignore[unresolved-attribute] - absent from the 3.12 stubs; skipped there
         assert _port(path, pattern) is native, (
             f"port and native disagree on {pattern!r} against {path!r}"
         )
@@ -118,7 +119,7 @@ class TestDifferential:
     def test_exception_scope_is_the_interpreters_own(self) -> None:
         """A non-string pattern raises exactly what native raises (delegation)."""
         with pytest.raises(TypeError):
-            _pathglob.full_match("a/b", 3)  # ty: ignore[invalid-argument-type]
+            _pathglob.full_match("a/b", 3)  # ty: ignore[invalid-argument-type] - deliberately a non-string pattern
 
 
 @pytest.mark.skipif(

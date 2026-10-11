@@ -61,18 +61,18 @@ def atomic_replace(
     """
     if mode is None and path.exists():
         mode = path.stat().st_mode & 0o7777
-    with tempfile.NamedTemporaryFile(
-        delete=False, dir=path.parent, prefix=f".{path.name}."
-    ) as stream:
-        stream.write(content)
-        stream.flush()
-        os.fsync(stream.fileno())
-        temporary = pathlib.Path(stream.name)
+    descriptor, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    # Bind the path before anything can fail, so every failure removes it.
+    temporary = pathlib.Path(name)
     try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
         if mode is not None:
             temporary.chmod(mode)
         temporary.replace(path)
-        with _open_directory(path.parent) as descriptor:
-            os.fsync(descriptor)
+        with _open_directory(path.parent) as directory_descriptor:
+            os.fsync(directory_descriptor)
     finally:
         temporary.unlink(missing_ok=True)
