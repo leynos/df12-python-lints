@@ -355,6 +355,138 @@ The lasting fix is redaction at record time with syrupy's
 `matcher=path_type(...)` (including its regex `replacer` idiom for values
 embedded in strings), then `pytest --snapshot-update`.
 
+## The df12-duplication Gate
+
+The package ships `df12-duplication`, a blocking code-duplication gate over the
+[nose](https://github.com/corca-ai/nose)
+detector. It is unrelated to the Python `nose` test framework, which is not a
+dependency. The command runs the pinned detector with the policy in the
+project's `pyproject.toml`, and fails while any duplication family is not
+covered by a reasoned exception.
+
+```bash
+df12-duplication check --repository .
+df12-duplication allow --repository . \
+  --member 'src/a.py::parse' \
+  --member 'src/b.py::parse' \
+  --member 'src/c.py::parse' \
+  --reason 'These independently versioned entry points deliberately retain this structure.'
+df12-duplication install --repository .
+```
+
+`--repository` defaults to the invocation directory and selects the target
+`pyproject.toml`. The command never derives the target from where it is
+installed, never changes the process working directory, and ignores
+`PYTHONPATH`. Relative paths (the roots, and a relative `--binary`) resolve
+against the selected repository. `--version` prints the package version, and
+`--help` lists every option.
+
+### Exit status
+
+- `0`: no blocking findings.
+- `1`: at least one family is not covered by an exception.
+- `2`: invalid invocation or configuration, or a failed analysis: a missing or
+  wrong binary, a non-zero detector exit, a timeout, malformed JSON or schema,
+  a missing root, or a scan whose roots contain no supported source. None of
+  these can produce a green gate. Expected failures print one line, not a
+  traceback.
+
+### Policy in `[tool.nose]`
+
+```toml
+[tool.nose]
+version = "0.20.0"            # the detector release the binary must report
+roots = ["src"]               # all roots go to one detector query
+mode = "syntax,semantic,near" # pinned, so nose defaults cannot widen the scan
+min-size = 24                 # smallest reported unit, in nose IL tokens
+surface = "all"               # "default" keeps nose's dashboard only
+top = 30                      # report budget; 0 asks for every family
+exclude = ["tests/**"]        # gitignore-style globs
+```
+
+Roots must be repository-relative, must exist and must stay inside the checkout.
+`top` is the number of ranked families nose returns, and omitting it keeps
+nose's own view size (30 in 0.20.0).
+
+### Reasoned exceptions
+
+```toml
+[[tool.duplication_gate.allow]]
+members = ["src/a.py::parse", "src/b.py::parse"]
+reason = "These entry points are versioned independently."
+```
+
+An entry uses `unit = "..."` for one location or `members = [...]` for two or
+more, and always records a reason. A key is a repository-relative path glob,
+optionally followed by `::name` to require nose's unit name. Globs follow
+`PurePosixPath.full_match`: `*` stays within one path segment and `**` spans
+segments. A `::name` key never matches a fragment that nose reports without a
+name.
+
+One entry must cover **every** location of a family. Several partial entries
+are never combined, so a third, unlisted copy makes the family block again.
+Keys carry no line numbers, so moving code does not invalidate an entry.
+
+`allow` accepts one or many `--member` values (the legacy `--first` and repeated
+`--second` options still work), rejects a blank reason or malformed key before
+touching the file, preserves comments, unrelated tables and file permissions,
+and is idempotent: repeating a member set updates its reason instead of adding
+a duplicate. Editing is serialized with an advisory lock, so concurrent `allow`
+runs (and `df12-skylos allow` runs) on one manifest do not lose each other's
+changes. The lock coordinates participating commands only, not arbitrary
+editors, and needs POSIX `flock`: Linux and macOS. Native Windows is not
+supported for authoring, and the command refuses rather than editing without a
+lock. `check` has no such requirement.
+
+### What the report means
+
+- An allow entry that matched nothing prints *unmatched in this scan*. Ranking,
+  the report budget, thresholds, file selection, or a family that grew can all
+  cause this. Review it; the command never deletes or widens an exception.
+- Exceptions are applied after nose ranks and caps its report, so allowed
+  families consume places in the budget. When the detector returns fewer
+  families than it found, the command warns that the report budget is saturated
+  and that the remaining families are not enforced. Setting `top = 0` enforces
+  every family, and is a policy change to review separately.
+
+### The detector binary
+
+`check` never downloads anything. It looks for the binary at `--binary`, else
+`$NOSE_BIN`, else `.tools/nose/nose` in the repository, else `nose` on `PATH`,
+and requires it to report exactly `nose <version>`.
+
+`install` fetches the release archive named by `[tool.nose].version` from
+`github.com/corca-ai/nose`, verifies its SHA-256 against the digest table
+shipped in the package, proves the executable reports the pinned version from a
+scratch directory, and only then moves it into place atomically. It refuses
+unsupported platforms (Linux with glibc and macOS, on x86-64 or AArch64), never
+compiles anything and never runs an installer script. A version without
+approved digests is rejected.
+
+### Native nose configuration cannot add a second policy
+
+nose reads `nose.toml`, `.nose.toml` and `nose.ignore.json` from its working
+directory. The command passes an empty configuration and an empty ignore file
+on every query, so only `[tool.nose]` and the allow entries apply. Inline
+`nose-ignore` comments and `.gitignore` files inside the scanned roots are
+source-level selection that nose applies itself, and remain in effect.
+
+### Installation
+
+```bash
+# Provisioned and pinned, as a Makefile would run it (see the migration guide).
+uv tool run --from 'git+https://github.com/leynos/df12-python-lints.git@<40-hex-commit>' \
+  df12-duplication check --repository .
+```
+
+The command needs `tomlkit`, which Pylint already pulls in. The `duplication`
+extra (`pip install 'df12-python-lints[duplication]'`) names that requirement
+explicitly. Python 3.12 and later are supported: the `PurePosixPath.full_match`
+semantics of Python 3.13 are provided on 3.12 by a tested port, and the Pylint
+plugin and `ambrleaks` never import any of this. See the
+[duplication gate migration guide](duplication-gate-migration.md) for the
+consumer migration.
+
 ## Quality Gates
 
 Generated projects use `make all` as the standard local quality gate. It runs
