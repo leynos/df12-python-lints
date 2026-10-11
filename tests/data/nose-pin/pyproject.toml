@@ -1,0 +1,12 @@
+# Names the nose release that CI installs with `df12-duplication install`, so
+# the bounded native-detector tests run against the pinned binary. Keep the
+# version in step with `releases.json` in the duplication package.
+[project]
+name = "nose-pin"
+version = "0"
+
+[tool.nose]
+version = "0.20.0"
+roots = ["."]
+mode = "syntax,semantic,near"
+min-size = 24
