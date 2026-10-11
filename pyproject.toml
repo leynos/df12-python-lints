@@ -1,6 +1,6 @@
 [project]
 name = "df12-python-lints"
-version = "0.3.0"
+version = "0.4.0"
 description = "df12-python-lints package"
 readme = "README.md"
 requires-python = ">=3.12"
