@@ -42,6 +42,7 @@ class TestCommandLevelLabels:
     """Commands print the label that matches the failure."""
 
     def _stderr(self, code_and_err: tuple[int, str]) -> str:
+        """Require exit status two and return the diagnostic stream."""
         code, err = code_and_err
         assert code == 2, err
         return err
@@ -49,6 +50,7 @@ class TestCommandLevelLabels:
     def _check(
         self, repo: pathlib.Path, runner: FakeRunner, backend_probe: BackendProbe
     ) -> tuple[int, str]:
+        """Run ``check`` and return the status and the diagnostic stream."""
         err = io.StringIO()
         context = context_for(repo, runner, backend_probe=backend_probe)
         code = commands.run_check(context, Streams(io.StringIO(), err))
