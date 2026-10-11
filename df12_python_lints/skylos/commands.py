@@ -115,7 +115,7 @@ def run_check(context: SkylosContext, streams: Streams) -> int:
         return EXIT_ERROR
     _LOG.info(
         "check backend=%s outcome=%s",
-        backend.split(" under")[0].replace(" ", "-"),
+        backend.split(" under", maxsplit=1)[0].replace(" ", "-"),
         outcome,
     )
     if outcome == "blocking":
