@@ -282,19 +282,19 @@ def test_generated_safe_roots_are_accepted(
 
 @_PROPERTY
 @given(
-    prefix=st.lists(_SAFE, max_size=2),
-    unsafe=_UNSAFE,
-    suffix=st.lists(_SAFE, max_size=2),
-    absolute=st.booleans(),
+    spec=st.tuples(
+        st.lists(_SAFE, max_size=2),
+        _UNSAFE,
+        st.lists(_SAFE, max_size=2),
+        st.booleans(),
+    )
 )
 def test_generated_unsafe_roots_are_rejected(
     tmp_path_factory: pytest.TempPathFactory,
-    prefix: list[str],
-    unsafe: str,
-    suffix: list[str],
-    absolute: bool,  # ruff: ignore[boolean-type-hint-positional-argument] - Hypothesis-injected.
+    spec: tuple[list[str], str, list[str], bool],
 ) -> None:
     """Traversal, symlink-escape, option-like and absolute spellings are refused."""
+    prefix, unsafe, suffix, absolute = spec
     repo = _roots_repo(tmp_path_factory)
     if not unsafe:
         root = "/" + "/".join([*prefix, *suffix]) if absolute else "/x"
