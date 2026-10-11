@@ -111,7 +111,13 @@ def _apply(document: tomlkit.TOMLDocument, symbol: str, reason: str) -> str:
         "tool.skylos.whitelist.documented",
     )
     existing = documented.get(symbol)
-    if existing is not None and str(existing) == reason:
+    if existing is not None and not isinstance(existing, str):
+        msg = (
+            f"tool.skylos.whitelist.documented[{symbol!r}] is not a string; "
+            "fix it by hand before recording an exception"
+        )
+        raise ToolConfigError(msg)
+    if existing == reason:
         return "unchanged"
     documented[symbol] = reason
     if created:

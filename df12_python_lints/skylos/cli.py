@@ -32,6 +32,7 @@ import sys
 import typing as typ
 
 from df12_python_lints._errors import ToolConfigError
+from df12_python_lints._log import configure, observe
 from df12_python_lints._runtime import Streams
 
 from . import commands
@@ -40,6 +41,8 @@ from .context import build_context
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from .context import SkylosContext
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,6 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--version", action="store_true", help="print versions and exit"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="log each operation and subprocess to standard error",
     )
     sub = parser.add_subparsers(dest="command")
     for name, summary in (
@@ -101,6 +109,7 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+    configure(verbose=args.verbose)
     if args.version:
         print(_version())
         return commands.EXIT_OK
@@ -117,10 +126,27 @@ def main(argv: cabc.Sequence[str] | None = None) -> int:
     except ToolConfigError as error:
         print(f"configuration error: {error}", file=sys.stderr)
         return commands.EXIT_ERROR
+    return _dispatch(args, context, streams)
+
+
+def _dispatch(
+    args: argparse.Namespace, context: SkylosContext, streams: Streams
+) -> int:
+    """Run the selected operation and log its outcome."""
     if args.command == "check":
-        return commands.run_check(context, streams)
+        return observe(
+            "check", context.repository, lambda: commands.run_check(context, streams)
+        )
     if args.command == "validate-config":
-        return commands.run_validate_config(context, streams)
-    return commands.run_allow(
-        context, symbol=args.symbol, reason=args.reason, streams=streams
+        return observe(
+            "validate-config",
+            context.repository,
+            lambda: commands.run_validate_config(context, streams),
+        )
+    return observe(
+        "allow",
+        context.repository,
+        lambda: commands.run_allow(
+            context, symbol=args.symbol, reason=args.reason, streams=streams
+        ),
     )

@@ -14,6 +14,7 @@ import tomllib
 import typing as typ
 
 from df12_python_lints._errors import ToolConfigError, describe
+from df12_python_lints._log import failure
 
 from .allow import record_whitelist_entry
 from .backend import build_command, classify, verify_backend
@@ -73,6 +74,7 @@ def run_validate_config(context: SkylosContext, streams: Streams) -> int:
     try:
         settings, warnings = load_policy(context)
     except ToolConfigError as error:
+        failure("validate-config", error)
         print(describe(error), file=streams.err)
         return EXIT_ERROR
     _warn(warnings, streams)
@@ -106,6 +108,7 @@ def run_check(context: SkylosContext, streams: Streams) -> int:
         print(result.stderr, end="", file=streams.err)
         outcome = classify(result)
     except ToolConfigError as error:
+        failure("check", error)
         print(describe(error), file=streams.err)
         return EXIT_ERROR
     if outcome == "blocking":
@@ -134,6 +137,7 @@ def run_allow(
             context.pyproject, symbol=symbol, reason=reason
         )
     except ToolConfigError as error:
+        failure("allow", error)
         print(describe(error), file=streams.err)
         return EXIT_ERROR
     verb = {

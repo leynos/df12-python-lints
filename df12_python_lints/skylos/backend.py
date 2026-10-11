@@ -51,8 +51,11 @@ EXIT_BLOCKING = 1
 _PIN = re.compile(r"\s*skylos\s*==\s*([0-9A-Za-z.+!-]+)\s*")
 _EMPTY_MARKER = "No Python files found in"
 # Skylos exposes `skylos.cli:main` and has no `__main__`, so the scan runs it
-# in a child interpreter. The child is `sys.executable`, so the scan uses the
-# very interpreter this command was started under.
+# in a child interpreter in isolated mode (`-I`): no current-directory entry on
+# `sys.path` and no `PYTHON*` environment, so a `skylos` package committed in
+# the scanned checkout can never shadow the pinned installation. The child is
+# `sys.executable`, so the scan uses the very interpreter this command was
+# started under.
 _BOOTSTRAP = "import sys; from skylos.cli import main; sys.argv[0] = 'skylos'; main()"
 # Local-only intent: no cloud upload, no provenance lookup, no grep
 # verification; dead-code analysis only. Nothing here contacts an AI service.
@@ -183,6 +186,7 @@ def build_command(
     """
     return [
         executable,
+        "-I",
         "-c",
         _BOOTSTRAP,
         "--config-file",
@@ -204,16 +208,27 @@ def classify(result: CommandResult) -> str:
     """
     if result.returncode == EXIT_BLOCKING:
         return "blocking"
-    if result.returncode == EXIT_FAILED_ANALYSIS:
+    if result.returncode != 0:
+        raise _failed_analysis(result.returncode)
+    _reject_empty_root(result.stderr)
+    return "clean"
+
+
+def _failed_analysis(status: int) -> ToolExecutionError:
+    """Describe a non-pass, non-blocking native status."""
+    if status == EXIT_FAILED_ANALYSIS:
         msg = (
             "skylos reported an invalid configuration or an incomplete analysis "
             "(exit status 2); a failed analysis is never a clean gate"
         )
-        raise ToolExecutionError(msg)
-    if result.returncode != 0:
-        msg = f"skylos exited with unexpected status {result.returncode}"
-        raise ToolExecutionError(msg)
-    empty = [line for line in result.stderr.splitlines() if _EMPTY_MARKER in line]
+    else:
+        msg = f"skylos exited with unexpected status {status}"
+    return ToolExecutionError(msg)
+
+
+def _reject_empty_root(stderr: str) -> None:
+    """Fail when Skylos logged that a configured root held no Python files."""
+    empty = [line for line in stderr.splitlines() if _EMPTY_MARKER in line]
     if empty:
         msg = (
             f"skylos found no Python files in a configured root "
@@ -221,4 +236,3 @@ def classify(result: CommandResult) -> str:
             "tool.df12_skylos.roots and tool.skylos.exclude"
         )
         raise ToolConfigError(msg)
-    return "clean"

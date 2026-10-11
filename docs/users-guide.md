@@ -511,8 +511,22 @@ df12-skylos allow --repository . \
 
 `--repository` defaults to the invocation directory. The target is never
 derived from where the command is installed, the working directory is never
-changed, and `PYTHONPATH` is ignored. `--version` prints the package version,
-the Skylos pin, the installed Skylos and the running interpreter.
+changed, and the scan runs in an isolated child interpreter (`-I`) that ignores
+`PYTHONPATH` and cannot import a `skylos` package committed in the scanned
+checkout. `--version` prints the package version, the Skylos pin, the installed
+Skylos and the running interpreter.
+
+### Skylos options
+
+- `--repository <path>`: the target checkout; default the current directory.
+- `check --timeout <seconds>`: bounds the Skylos scan; default 600. A timeout
+  is a failed analysis and exits `2`.
+- `allow --symbol <name> --reason <text>`: both are required; see
+  [Documented exceptions](#documented-exceptions).
+- `--verbose` (before the subcommand): logs each operation and the scan
+  subprocess, with outcome and elapsed time, to standard error.
+- `--version`: prints versions and exits. `validate-config` takes only
+  `--repository`.
 
 ### Skylos exit status
 

@@ -30,6 +30,14 @@ SELECTOR_KEYS = (
     "base_class",
     "base_classes",
 )
+PARENT_KEYS = frozenset({
+    "name",
+    "full_name",
+    "module",
+    "path",
+    "base_class",
+    "base_classes",
+})
 _STRING_OR_LIST_KEYS = (*SELECTOR_KEYS, "type", "module", "path")
 
 
@@ -128,13 +136,27 @@ def _validate_rule(table: cabc.Mapping[str, object], *, context: str) -> None:
             _require_string_or_list(table[key], context=f"{context}.{key}")
     parent = table.get("parent")
     if parent is not None:
-        _validate.require_table(parent, context=f"{context}.parent")
+        _validate_parent(parent, context=f"{context}.parent")
     if not (parent or any(table.get(key) for key in SELECTOR_KEYS)):
         msg = (
             f"{context} selects nothing: Skylos silently drops a rule without "
             f"one of {', '.join(SELECTOR_KEYS)} or parent"
         )
         raise ToolConfigError(msg)
+
+
+def _validate_parent(parent: object, *, context: str) -> None:
+    """Validate a nested parent selector against the keys Skylos honours."""
+    table = _validate.require_table(parent, context=context)
+    unknown = sorted(set(table) - PARENT_KEYS)
+    if unknown:
+        msg = (
+            f"{context} has unsupported keys {unknown}; Skylos honours "
+            f"{', '.join(sorted(PARENT_KEYS))}"
+        )
+        raise ToolConfigError(msg)
+    for key, value in table.items():
+        _require_string_or_list(value, context=f"{context}.{key}")
 
 
 def _require_string_or_list(value: object, *, context: str) -> None:

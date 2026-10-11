@@ -453,6 +453,7 @@ dev = [
     { name = "pytest-xdist" },
     { name = "pyyaml" },
     { name = "ruff" },
+    { name = "skylos" },
     { name = "ty" },
 ]
 
@@ -478,6 +479,7 @@ dev = [
     { name = "pytest-xdist" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruff" },
+    { name = "skylos", specifier = "==4.33.2" },
     { name = "ty" },
 ]
 

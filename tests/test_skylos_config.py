@@ -6,6 +6,8 @@ import tomllib
 import typing as typ
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 from skylos_support import POLICY, make_repository
 
 from df12_python_lints._errors import ToolConfigError
@@ -73,8 +75,8 @@ class TestDocumentedWhitelist:
         """Existing undocumented names keep working but are flagged."""
         text = _STRICT + '[tool.skylos.whitelist]\nnames = ["legacy"]\n'
         warnings = _validate(text)
-        assert len(warnings) == 1
-        assert "no reason" in warnings[0]
+        assert len(warnings) == 1, "exactly one advisory"
+        assert "no reason" in warnings[0], "the advisory names the missing reason"
 
     @pytest.mark.parametrize(
         "text",
@@ -110,7 +112,7 @@ class TestRuntimeEntryPoints:
             + "[[tool.skylos.dead_code.entrypoints]]\n"
             + 'full_name = "pkg.f"\nreason = "r"\n'
         )
-        assert "no type" in _validate(text)[0]
+        assert "no type" in _validate(text)[0], "the advisory names the missing type"
 
     @pytest.mark.parametrize(
         ("body", "fragment"),
@@ -139,6 +141,25 @@ class TestRuntimeEntryPoints:
         with pytest.raises(ToolConfigError, match="array of tables"):
             _validate(text)
 
+    @pytest.mark.parametrize(
+        "parent",
+        [
+            '{ nmae = "Main" }',
+            "{ name = 3 }",
+            "{ name = [] }",
+            "{}",
+            '{ name = "A", x = 1 }',
+        ],
+    )
+    def test_a_malformed_parent_selector_is_rejected(self, parent: str) -> None:
+        """A parent table Skylos would discard is an error, not a selector."""
+        text = _STRICT + (
+            '[[tool.skylos.dead_code.entrypoints]]\ntype = "method"\nreason = "r"\n'
+            f"parent = {parent}\n"
+        )
+        with pytest.raises(ToolConfigError, match="parent"):
+            _validate(text)
+
     def test_parent_only_selector_counts(self) -> None:
         """A rule selecting through its parent class is a real selector."""
         text = _STRICT + (
@@ -165,8 +186,8 @@ class TestScanSettings:
     def test_valid_table(self, tmp_path: pathlib.Path) -> None:
         """Roots and the minimum interpreter are read."""
         settings = self._load(tmp_path, POLICY)
-        assert settings.roots == ("pkg",)
-        assert settings.python == (3, 12)
+        assert settings.roots == ("pkg",), "the production roots are read"
+        assert settings.python == (3, 12), "the minimum interpreter is read"
 
     @pytest.mark.parametrize(
         ("old", "new", "fragment"),
@@ -215,3 +236,41 @@ class TestScanSettings:
         )
         with pytest.raises(ToolConfigError, match="escapes the repository"):
             load_scan_settings(data, repository=repo)
+
+
+_SEGMENTS = st.sampled_from(["a", "b", "c", ".", "..", "", "out", "-x", "a b"])
+
+
+@settings(
+    max_examples=200,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+@given(parts=st.lists(_SEGMENTS, min_size=1, max_size=4), absolute=st.booleans())
+def test_accepted_roots_are_always_safe_and_contained(
+    tmp_path_factory: pytest.TempPathFactory,
+    parts: list[str],
+    absolute: bool,  # ruff: ignore[boolean-type-hint-positional-argument] - Hypothesis-injected.
+) -> None:
+    """Whatever the spelling, an accepted root resolves inside the repository.
+
+    Traversal, absolute, option-like and symlink-escaping spellings must be
+    rejected with a configuration error and never any other exception.
+    """
+    base = tmp_path_factory.mktemp("roots")
+    repo = make_repository(base / "repo")
+    (repo / "a" / "c").mkdir(parents=True, exist_ok=True)
+    (repo / "b").mkdir(exist_ok=True)
+    outside = base / "outside"
+    outside.mkdir(exist_ok=True)
+    if not (repo / "out").exists():
+        (repo / "out").symlink_to(outside, target_is_directory=True)
+    root = ("/" if absolute else "") + "/".join(parts)
+    data = {"tool": {"df12_skylos": {"roots": [root], "python": "3.12"}}}
+    try:
+        result = load_scan_settings(data, repository=repo)
+    except ToolConfigError:
+        return
+    resolved = (repo / result.roots[0]).resolve()
+    assert resolved.is_relative_to(repo.resolve()), f"{root!r} escaped"
+    assert not result.roots[0].startswith(("/", "-")), f"{root!r} is unsafe"

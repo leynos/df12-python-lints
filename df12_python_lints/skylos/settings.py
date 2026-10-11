@@ -106,19 +106,27 @@ def _validate_roots(roots: tuple[str, ...], *, repository: pathlib.Path) -> None
     """Reject roots that are unsafe, missing or outside the repository."""
     base = repository.resolve()
     for root in roots:
-        if root.startswith("-"):
-            msg = f"{TABLE}.roots entry {root!r} must not start with '-'"
-            raise ToolConfigError(msg)
-        if _validate.is_escaping_path(root):
-            msg = (
-                f"{TABLE}.roots entry {root!r} must be a repository-relative POSIX path"
-            )
-            raise ToolConfigError(msg)
-        try:
-            resolved = (base / root).resolve(strict=True)
-        except OSError as error:
-            msg = f"{TABLE}.roots entry {root!r} does not exist: {error}"
-            raise ToolConfigError(msg) from error
-        if not resolved.is_relative_to(base):
-            msg = f"{TABLE}.roots entry {root!r} escapes the repository"
-            raise ToolConfigError(msg)
+        _check_spelling(root)
+        _check_location(root, base)
+
+
+def _check_spelling(root: str) -> None:
+    """Reject a root that is an option, absolute, or escapes upward."""
+    if root.startswith("-"):
+        msg = f"{TABLE}.roots entry {root!r} must not start with '-'"
+        raise ToolConfigError(msg)
+    if _validate.is_escaping_path(root):
+        msg = f"{TABLE}.roots entry {root!r} must be a repository-relative POSIX path"
+        raise ToolConfigError(msg)
+
+
+def _check_location(root: str, base: pathlib.Path) -> None:
+    """Require the root to exist and resolve inside the repository."""
+    try:
+        resolved = (base / root).resolve(strict=True)
+    except OSError as error:
+        msg = f"{TABLE}.roots entry {root!r} does not exist: {error}"
+        raise ToolConfigError(msg) from error
+    if not resolved.is_relative_to(base):
+        msg = f"{TABLE}.roots entry {root!r} escapes the repository"
+        raise ToolConfigError(msg)

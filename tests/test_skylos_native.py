@@ -176,6 +176,40 @@ class TestVerdicts:
         assert code == 0, out
 
 
+class TestIsolation:
+    """The scan child cannot be hijacked by the scanned checkout."""
+
+    def test_a_decoy_skylos_package_in_the_target_cannot_replace_the_backend(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A committed ``skylos/cli.py`` must not run in place of the pinned one."""
+        files = {
+            "pkg/__init__.py": "",
+            "pkg/core.py": _CORE,
+            "skylos/__init__.py": "",
+            "skylos/cli.py": "def main():\n    raise SystemExit(0)\n",
+        }
+        code, out, _ = _check(_repo(tmp_path, files))
+        assert code == 1, "the real backend must still find the unused function"
+        assert "never_called" in out, "the verdict came from the pinned Skylos"
+
+    def test_pythonpath_is_ignored_by_the_scan_child(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A decoy on ``PYTHONPATH`` cannot shadow the pinned backend either."""
+        decoy = tmp_path / "decoy" / "skylos"
+        decoy.mkdir(parents=True)
+        (decoy / "__init__.py").write_text("", encoding="utf-8")
+        (decoy / "cli.py").write_text(
+            "def main():\n    raise SystemExit(0)\n", encoding="utf-8"
+        )
+        monkeypatch.setenv("PYTHONPATH", str(decoy.parent))
+        repo = _repo(tmp_path / "t", {"pkg/__init__.py": "", "pkg/core.py": _CORE})
+        code, out, _ = _check(repo)
+        assert code == 1, out
+        assert "never_called" in out
+
+
 class TestFailuresNeverPass:
     """Missing, empty and unreadable-source scans cannot be clean."""
 

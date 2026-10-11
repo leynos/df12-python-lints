@@ -134,6 +134,17 @@ class TestRecording:
         assert 'reason = "nose entry"' in text
         assert manifest.stat().st_mode & 0o777 == 0o640
 
+    def test_an_invalid_existing_value_is_refused_not_reported_unchanged(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An existing non-string value is never mistaken for a matching reason."""
+        policy = POLICY + "[tool.skylos.whitelist.documented]\nx = 3\n"
+        manifest = _manifest(tmp_path, policy)
+        before = manifest.read_bytes()
+        with pytest.raises(ToolConfigError, match="is not a string"):
+            record_whitelist_entry(manifest, symbol="x", reason="3")
+        assert manifest.read_bytes() == before
+
     def test_runtime_entry_points_are_never_created(
         self, tmp_path: pathlib.Path
     ) -> None:

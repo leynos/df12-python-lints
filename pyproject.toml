@@ -37,6 +37,9 @@ dev = [
     "hypothesis>=6",
     "crosshair-tool",
     "pyyaml>=6.0.3",
+    # The same release as the `skylos` extra (a test asserts they agree), so the
+    # coverage lane, which syncs only the dev group, runs the native tests.
+    "skylos==4.33.2",
 ]
 
 [tool.ruff]

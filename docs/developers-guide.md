@@ -236,6 +236,8 @@ authority; the package validates, invokes and adapts.
 | `allow.py`    | documented-whitelist authoring through the shared manifest transaction      |
 | `commands.py` | `check`, `validate-config` and `allow`, and the exit statuses               |
 
+The design decisions are recorded in [ADR 003](adr-003-df12-skylos-command.md).
+
 It reuses `_manifest.py` (the one lock protocol, shared with
 `df12-duplication`), `_runtime.py` (the subprocess boundary and repository
 resolution), `_validate.py` and `_errors.py`.

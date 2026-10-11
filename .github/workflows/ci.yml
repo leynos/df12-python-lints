@@ -68,6 +68,20 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         run: make audit
 
+      # The bounded native-detector tests need the pinned nose binary; install it
+      # through the command's own explicit `install` operation so the coverage
+      # lane runs them instead of skipping them.
+      - name: Cache the pinned nose detector
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools/nose
+          key: nose-${{ runner.os }}-${{ hashFiles('tests/data/nose-pin/pyproject.toml') }}
+
+      - name: Install the pinned nose detector
+        run: >-
+          uv run df12-duplication install
+          --repository tests/data/nose-pin --binary "$PWD/.tools/nose/nose"
+
       # Coverage runs on pull requests only. Pushes to main upload their
       # own coverage (and advance the ratchet baseline) via
       # coverage-main.yml, so generating it here as well would duplicate

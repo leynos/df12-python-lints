@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import io
+import logging
 import typing as typ
 
 import pytest
 from skylos_support import FakeRunner, context_for, make_repository, probe
 
+from df12_python_lints import _log
 from df12_python_lints._runtime import Streams
 from df12_python_lints.skylos import cli, commands
 
@@ -198,3 +200,20 @@ def test_a_manifest_that_is_not_utf8_exits_two(tmp_path: pathlib.Path) -> None:
     code = commands.run_validate_config(context_for(repo), Streams(io.StringIO(), err))
     assert code == 2
     assert "cannot read" in err.getvalue()
+
+
+def test_verbose_logs_the_operation_and_its_outcome(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One record per operation carries scope, outcome and elapsed time."""
+    monkeypatch.setattr(_log.logger, "handlers", list(_log.logger.handlers))
+    monkeypatch.setattr(_log.logger, "level", logging.NOTSET)
+    caplog.set_level(logging.DEBUG, logger="df12_python_lints")
+    repo = make_repository(tmp_path)
+    assert cli.main(["--verbose", "validate-config", "--repository", str(repo)]) == 0
+    messages = [record.getMessage() for record in caplog.records]
+    operation = next(m for m in messages if m.startswith("operation=validate-config"))
+    assert "outcome=ok" in operation, operation
+    assert "elapsed_seconds=" in operation, operation

@@ -73,6 +73,16 @@ class TestPin:
         assert backend.installed_version() is None
 
 
+def test_the_dev_group_pin_equals_the_extra_pin() -> None:
+    """The dev-group copy that feeds the coverage lane cannot drift from the extra."""
+    import tomllib
+
+    manifest = pathlib.Path(__file__).resolve().parent.parent / "pyproject.toml"
+    data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    dev = [r for r in data["dependency-groups"]["dev"] if r.startswith("skylos==")]
+    assert dev == [f"skylos=={backend.pinned_version()}"]
+
+
 class TestVerification:
     """Backend and interpreter are verified before any analysis."""
 
@@ -112,15 +122,15 @@ class TestCommand:
         command = backend.build_command(
             "py", pathlib.Path("/r/pyproject.toml"), _SETTINGS
         )
-        assert command[:3] == ["py", "-c", backend._BOOTSTRAP]
-        assert command[3:8] == [
+        assert command[:4] == ["py", "-I", "-c", backend._BOOTSTRAP]
+        assert command[4:9] == [
             "--config-file",
             "/r/pyproject.toml",
             "a",
             "b/c.py",
             "--category",
         ]
-        assert command[7:] == [
+        assert command[8:] == [
             "--category", "dead_code", "--gate", "--format", "concise",
             "--no-upload", "--no-provenance", "--no-grep-verify",
         ]  # fmt: skip
