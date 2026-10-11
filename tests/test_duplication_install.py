@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import pathlib
+import sys
 import tarfile
 
 import pytest
@@ -355,3 +356,36 @@ def test_a_staging_write_failure_is_a_tool_error(
     monkeypatch.setattr(pathlib.Path, "write_bytes", refuse)
     with pytest.raises(ToolExecutionError, match="cannot stage"):
         install._prove_version(b"x", PINNED, context)
+
+
+def test_a_scratch_directory_failure_makes_install_exit_two(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """If the version-check scratch directory cannot be created, install exits 2."""
+    archive = _good()
+    repo = make_repository(tmp_path / "repo")
+    context = context_module.build_context(
+        repository=str(repo), binary=None, environment={}
+    )
+    monkeypatch.setattr(
+        install,
+        "release_digests",
+        lambda _v: {"x86_64-unknown-linux-gnu": _sha(archive)},
+    )
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        """Simulate a full or read-only temporary directory."""
+        msg = "no space left"
+        raise OSError(msg)
+
+    monkeypatch.setattr(install.tempfile, "TemporaryDirectory", refuse)
+    boundary = install.InstallBoundary(
+        _LINUX, downloader=lambda _url: archive, output=lambda _m: None
+    )
+    streams = Streams(sys.stdout, sys.stderr)
+    assert run_install(context, boundary=boundary, streams=streams) == 2
+    err = capsys.readouterr().err
+    assert "cannot create the scratch directory" in err
+    assert "Traceback" not in err

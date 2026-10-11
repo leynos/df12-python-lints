@@ -9,6 +9,7 @@ version from a scratch location, and only then moved into place atomically.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses as dc
 import pathlib
 import platform
@@ -146,9 +147,16 @@ def _reports(binary: pathlib.Path, version: str, context: RunContext) -> bool:
 
 def _prove_version(payload: bytes, version: str, context: RunContext) -> None:
     """Run the verified payload from a scratch directory before installing it."""
-    with tempfile.TemporaryDirectory(
-        prefix="df12-duplication-install-", ignore_cleanup_errors=True
-    ) as scratch:
+    with contextlib.ExitStack() as stack:
+        try:
+            scratch = stack.enter_context(
+                tempfile.TemporaryDirectory(
+                    prefix="df12-duplication-install-", ignore_cleanup_errors=True
+                )
+            )
+        except OSError as error:
+            msg = f"cannot create the scratch directory for the version check: {error}"
+            raise ToolExecutionError(msg) from error
         candidate = pathlib.Path(scratch) / "nose"
         _stage(candidate, payload)
         if not _reports(candidate, version, context):
