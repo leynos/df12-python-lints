@@ -1,0 +1,4 @@
+exit: 0
+--- stdout
+duplication gate passed (nose 0.20.0)
+--- stderr

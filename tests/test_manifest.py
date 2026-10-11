@@ -325,3 +325,50 @@ class TestConcurrency:
             data = tomllib.loads(manifest.read_text(encoding="utf-8"))
             actual = set(data.get("tool", {}).get("probe", {}))
         assert actual == expected, f"lost or invented edits: {actual ^ expected}"
+
+
+class TestTransactionEdges:
+    """Failures at the edges of the transaction."""
+
+    def test_a_lock_release_failure_neither_raises_nor_loses_the_edit(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Releasing is best effort: closing the file releases the lock anyway."""
+        import fcntl
+
+        real = fcntl.flock
+
+        def flaky(descriptor: int, operation: int) -> None:
+            """Fail only the release."""
+            if operation == fcntl.LOCK_UN:
+                msg = "release refused"
+                raise OSError(msg)
+            real(descriptor, operation)
+
+        monkeypatch.setattr(fcntl, "flock", flaky)
+        manifest = _write_manifest(tmp_path)
+        assert _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
+        assert "a = true" in manifest.read_text(encoding="utf-8")
+
+    def test_a_directory_fsync_failure_leaves_the_new_content_in_place(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The post-rename fsync failing reports the error but the rename stands."""
+        target = tmp_path / "f"
+        target.write_text("old", encoding="utf-8")
+        calls: list[int] = []
+        real = os.fsync
+
+        def second_fails(descriptor: int) -> None:
+            """Let the file fsync pass and fail the directory fsync."""
+            calls.append(descriptor)
+            if len(calls) == 2:
+                raise OSError(errno.EIO, "io error")
+            real(descriptor)
+
+        monkeypatch.setattr(os, "fsync", second_fails)
+        with pytest.raises(OSError, match="io error"):
+            atomic_replace(target, b"new")
+        monkeypatch.undo()
+        assert target.read_text(encoding="utf-8") == "new", "the rename had happened"
+        assert [p.name for p in tmp_path.iterdir()] == ["f"], "no temporary file"

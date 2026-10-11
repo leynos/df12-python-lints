@@ -37,7 +37,7 @@ def load_allowlist(pyproject: pathlib.Path) -> tuple[AllowEntry, ...]:
     try:
         with pyproject.open("rb") as handle:
             data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as error:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         msg = f"cannot load duplication allowlist from {pyproject}: {error}"
         raise ToolConfigError(msg) from error
     tool = _validate.require_table(data.get("tool", {}), context="tool")

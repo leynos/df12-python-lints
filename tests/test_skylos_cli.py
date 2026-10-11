@@ -188,3 +188,13 @@ class TestCommandLine:
         with pytest.raises(SystemExit) as raised:
             cli.main(["allow", "--repository", str(repo), "--symbol", "x"])
         assert raised.value.code == 2
+
+
+def test_a_manifest_that_is_not_utf8_exits_two(tmp_path: pathlib.Path) -> None:
+    """Invalid UTF-8 in ``pyproject.toml`` is a configuration error."""
+    repo = make_repository(tmp_path)
+    (repo / "pyproject.toml").write_bytes(b"[project]\nname = '\xff\xfe'\n")
+    err = io.StringIO()
+    code = commands.run_validate_config(context_for(repo), Streams(io.StringIO(), err))
+    assert code == 2
+    assert "cannot read" in err.getvalue()

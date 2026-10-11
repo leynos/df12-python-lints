@@ -76,9 +76,13 @@ def run_command(
         msg = f"{command[0]} timed out after {timeout} seconds"
         raise ToolExecutionError(msg) from error
     except UnicodeDecodeError as error:
+        _LOG.debug("subprocess program=%s outcome=undecodable", command[0])
         msg = f"{command[0]} produced output that is not valid UTF-8: {error}"
         raise ToolExecutionError(msg) from error
     except OSError as error:
+        _LOG.debug(
+            "subprocess program=%s outcome=cannot-start error=%s", command[0], error
+        )
         msg = f"cannot run {command[0]}: {error}"
         raise ToolExecutionError(msg) from error
     _LOG.debug(

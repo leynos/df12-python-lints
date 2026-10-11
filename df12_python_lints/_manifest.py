@@ -24,6 +24,7 @@ Elsewhere the transaction refuses to run rather than edit without a lock.
 from __future__ import annotations
 
 import contextlib
+import logging
 import typing as typ
 
 from ._atomic import atomic_replace
@@ -35,6 +36,7 @@ if typ.TYPE_CHECKING:
 
     import tomlkit
 
+_LOG = logging.getLogger("df12_python_lints.manifest")
 _EXTRA_HINT = (
     "install the optional dependency with `pip install df12-python-lints[{extra}]`"
 )
@@ -85,7 +87,19 @@ def manifest_lock(target: pathlib.Path) -> cabc.Iterator[None]:
         try:
             yield
         finally:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            _release(fcntl, lock, lock_path)
+
+
+def _release(fcntl: typ.Any, lock: typ.IO[str], lock_path: pathlib.Path) -> None:  # ruff: ignore[any-type] - the lazily imported fcntl module.
+    """Release the lock; a failure is logged, never raised.
+
+    Closing the file releases the lock anyway, and raising from here would mask
+    the error that ended the transaction.
+    """
+    try:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    except OSError as error:
+        _LOG.warning("lock release failed lock=%s error=%s", lock_path, error)
 
 
 def resolve_manifest(path: pathlib.Path) -> pathlib.Path:

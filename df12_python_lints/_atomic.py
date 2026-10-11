@@ -38,7 +38,9 @@ def atomic_replace(
 
     The temporary file lives in the destination directory so the final
     ``replace`` is a same-filesystem rename. A failure at any step removes
-    the temporary file and leaves the original untouched.
+    the temporary file and leaves the original untouched, with one exception:
+    the final directory ``fsync`` runs after the rename, so if it fails the new
+    content is already in place and only its durability is uncertain.
 
     Parameters
     ----------

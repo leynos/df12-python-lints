@@ -49,7 +49,7 @@ def load_policy(context: SkylosContext) -> tuple[ScanSettings, tuple[str, ...]]:
     try:
         with context.pyproject.open("rb") as handle:
             data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as error:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         msg = f"cannot read {context.pyproject}: {error}"
         raise ToolConfigError(msg) from error
     warnings = validate_native(data)

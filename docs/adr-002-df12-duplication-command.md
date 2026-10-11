@@ -99,8 +99,11 @@ silent by default and enabled by `--verbose`.
 
 - One implementation, one test suite and one provisioning path replace several
   vendored copies; consumer migration is a deletion checklist.
-- The report budget is reported, not changed: enforcement stays bounded until a
-  repository chooses `top = 0` as a reviewed policy change.
+- The report budget is reported, and a saturated report with nothing blocking
+  fails closed (status 2): allowed families consume the capped budget, so a
+  pass would leave unseen families unchecked. A repository whose report is
+  saturated sets `top = 0` (or a larger `top`) and adjudicates the newly
+  visible families.
 - Native Windows is not supported for authoring.
 - A new nose release needs a reviewed digest entry and a test run against the
   real binary.

@@ -9,11 +9,13 @@ invocation or configuration or a failed analysis.
 from __future__ import annotations
 
 import contextlib
+import logging
 import pathlib
 import tempfile
 import typing as typ
 
-from df12_python_lints._errors import ToolConfigError, describe
+from df12_python_lints._errors import ToolConfigError, ToolExecutionError, describe
+from df12_python_lints._log import failure
 
 from .allowlist import load_allowlist, record_allow_entry
 from .detector import NeutralFiles, resolve_binary, run_detector, write_neutral_files
@@ -30,6 +32,7 @@ if typ.TYPE_CHECKING:
     from .policy import AllowEntry
     from .schema import DetectorReport, Finding
 
+_LOG = logging.getLogger("df12_python_lints.duplication")
 EXIT_OK = 0
 EXIT_BLOCKING = 1
 EXIT_ERROR = 2
@@ -49,8 +52,18 @@ def _neutral_files() -> cabc.Iterator[NeutralFiles]:
         Empty ``--config`` and ``--ignore-file`` files in a scratch directory
         outside the checkout, removed when the query ends.
     """
-    with tempfile.TemporaryDirectory(prefix="df12-duplication-") as scratch:
-        yield write_neutral_files(pathlib.Path(scratch))
+    with contextlib.ExitStack() as stack:
+        try:
+            scratch = stack.enter_context(
+                tempfile.TemporaryDirectory(
+                    prefix="df12-duplication-", ignore_cleanup_errors=True
+                )
+            )
+            neutral = write_neutral_files(pathlib.Path(scratch))
+        except OSError as error:
+            msg = f"cannot prepare the scratch files for the detector: {error}"
+            raise ToolExecutionError(msg) from error
+        yield neutral
 
 
 def run_check(context: RunContext, streams: Streams) -> int:
@@ -68,9 +81,20 @@ def run_check(context: RunContext, streams: Streams) -> int:
         with _neutral_files() as neutral:
             report = run_detector(settings, context, neutral)
     except ToolConfigError as error:
+        failure("check", error)
         print(describe(error), file=streams.err)
         return EXIT_ERROR
     blocking, allowed, unmatched = partition_findings(report.findings, allowlist)
+    _LOG.info(
+        "check detector=nose-%s families_total=%d families_shown=%d "
+        "blocking=%d allowed=%d unmatched=%d",
+        settings.version,
+        report.total,
+        report.shown,
+        len(blocking),
+        len(allowed),
+        len(unmatched),
+    )
     _print_diagnostics(report, unmatched, streams)
     if report.is_saturated and not blocking:
         # A capped report that shows nothing blocking cannot prove the rest is
@@ -155,6 +179,7 @@ def run_allow(
     try:
         outcome = record_allow_entry(context.pyproject, members=members, reason=reason)
     except ToolConfigError as error:
+        failure("allow", error)
         print(describe(error), file=streams.err)
         return EXIT_ERROR
     verb = {
@@ -181,6 +206,7 @@ def run_install(
         settings = load_settings(context.pyproject)
         install_detector(context, version=settings.version, boundary=boundary)
     except ToolConfigError as error:
+        failure("install", error)
         print(describe(error), file=streams.err)
         return EXIT_ERROR
     return EXIT_OK

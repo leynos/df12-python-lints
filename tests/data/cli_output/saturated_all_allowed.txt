@@ -1,0 +1,5 @@
+exit: 2
+--- stdout
+--- stderr
+report budget saturated: nose returned 1 of 40 families, and allowed families consume budget places, so families beyond the budget are not enforced. Raise tool.nose.top, or set it to 0 for every family, as a reviewed policy change.
+error: the gate cannot prove a clean scan: nose reported 40 families but returned only 1. Set tool.nose.top = 0 (every family) or raise it above the total, adjudicating any newly visible families.

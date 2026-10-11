@@ -377,13 +377,14 @@ df12-duplication install --repository .
 `--repository` defaults to the invocation directory and selects the target
 `pyproject.toml`. `--timeout <seconds>` (default 120) bounds each detector
 invocation, including the version check that `check` runs and the one `install`
-uses to prove the binary; a timeout is a failed analysis and exits `2`. The
-command never derives the target from where it is installed, never changes the
-process working directory, and ignores `PYTHONPATH`. Relative paths (the roots,
-and a relative `--binary`) resolve against the selected repository. `--version`
-prints the package version, and `--help` lists every option. `--verbose`
-(before the subcommand) logs one record per operation and one per subprocess or
-download to standard error.
+uses to prove the binary; a timeout is a failed analysis and exits `2`. `allow`
+runs no detector, so it ignores the option. The command never derives the
+target from where it is installed, never changes the process working directory,
+and ignores `PYTHONPATH`. Relative paths (the roots, and a relative `--binary`)
+resolve against the selected repository. `--version` prints the package
+version, and `--help` lists every option. `--verbose` (before the subcommand)
+logs one record per operation and one per subprocess or download to standard
+error.
 
 ### Exit status
 
