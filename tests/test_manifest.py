@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import builtins
-import multiprocessing
+import errno
+import os
 import pathlib
 import sys
+import tempfile
 import tomllib
 import typing as typ
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+from worker_support import run_workers
 
 from df12_python_lints import _manifest
 from df12_python_lints._atomic import atomic_replace
@@ -19,6 +24,7 @@ from df12_python_lints._errors import (
     ToolPlatformError,
 )
 
+_KEYS = ["a", "b", "c", "d", "e", "f"]
 _BASE = '[project]\nname = "demo"\nversion = "0"\n'
 
 if typ.TYPE_CHECKING:
@@ -79,7 +85,7 @@ class TestTransaction:
         manifest = _write_manifest(tmp_path)
         before = manifest.read_bytes()
 
-        def reject(_document: typ.Any) -> bool:  # ruff: ignore[any-type]
+        def reject(_document: typ.Any) -> bool:  # ruff: ignore[any-type] - a tomlkit document
             """Reject the request."""
             msg = "nope"
             raise ToolConfigError(msg)
@@ -139,7 +145,7 @@ class TestTransaction:
         manifest = _write_manifest(tmp_path)
         real_import = builtins.__import__
 
-        def refuse(name: str, *args: typ.Any, **kwargs: typ.Any) -> typ.Any:  # ruff: ignore[any-type]
+        def refuse(name: str, *args: typ.Any, **kwargs: typ.Any) -> typ.Any:  # ruff: ignore[any-type] - mirrors builtins.__import__
             """Refuse to import tomlkit."""
             if name == "tomlkit":
                 raise ImportError(name)
@@ -189,6 +195,60 @@ class TestLockIdentity:
         assert manifest.read_bytes() == before
 
 
+class TestFailureModes:
+    """Environmental failures are tool errors, and leave nothing behind."""
+
+    def test_a_failed_fsync_removes_the_temporary_file(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A write failure (for example ENOSPC) leaves the original and no debris."""
+        target = tmp_path / "f"
+        target.write_text("original", encoding="utf-8")
+
+        def full(_descriptor: int) -> None:
+            """Simulate a full disk at fsync."""
+            raise OSError(errno.ENOSPC, "no space left on device")
+
+        monkeypatch.setattr(os, "fsync", full)
+        with pytest.raises(OSError, match="no space"):
+            atomic_replace(target, b"replacement")
+        monkeypatch.undo()
+        assert target.read_text(encoding="utf-8") == "original"
+        assert [p.name for p in tmp_path.iterdir()] == ["f"], "no temporary file"
+
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
+    def test_an_unlockable_directory_is_a_tool_error_not_a_traceback(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A read-only manifest directory fails with the tool's own error."""
+        manifest = _write_manifest(tmp_path / "ro")
+        manifest.parent.chmod(0o500)
+        try:
+            with pytest.raises(
+                ToolExecutionError, match="cannot open the manifest lock"
+            ):
+                _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
+        finally:
+            manifest.parent.chmod(0o700)
+
+    def test_a_filesystem_that_refuses_flock_is_a_tool_error(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An ``flock`` failure names the lock file and is not an ``OSError``."""
+        import fcntl
+
+        def refuse(_descriptor: int, _operation: int) -> None:
+            """Simulate a filesystem without advisory locks."""
+            raise OSError(errno.ENOLCK, "no locks available")
+
+        monkeypatch.setattr(fcntl, "flock", refuse)
+        manifest = _write_manifest(tmp_path)
+        before = manifest.read_bytes()
+        with pytest.raises(ToolExecutionError, match="cannot lock"):
+            _manifest.edit_manifest(manifest, _set_key("a"), extra="duplication")
+        assert manifest.read_bytes() == before
+
+
 class TestAtomicReplace:
     """The low-level replacement keeps modes and cleans up."""
 
@@ -205,69 +265,63 @@ class TestAtomicReplace:
         assert target.stat().st_mode & 0o777 == 0o755, "explicit mode applied"
 
 
-def _worker(path: str, key: str, repeat: int) -> None:
-    """Add ``repeat`` distinct keys to the manifest from another process."""
-    manifest = pathlib.Path(path)
-    for index in range(repeat):
-        _manifest.edit_manifest(
-            manifest, _set_key(f"{key}{index}"), extra="duplication"
-        )
-
-
 class TestConcurrency:
     """Real concurrent processes must not lose each other's edits."""
 
-    def test_concurrent_processes_keep_every_edit(self, tmp_path: pathlib.Path) -> None:
-        """Four processes each add distinct keys; all of them must survive."""
-        manifest = _write_manifest(tmp_path)
-        context = multiprocessing.get_context("spawn")
-        workers = [
-            context.Process(target=_worker, args=(str(manifest), f"p{n}_", 8))
-            for n in range(4)
-        ]
-        for process in workers:
-            process.start()
-        for process in workers:
-            process.join(timeout=120)
-            assert process.exitcode == 0, "a worker failed"
-        keys = set(tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]["probe"])
-        expected = {f"p{n}_{i}" for n in range(4) for i in range(8)}
-        assert keys == expected, f"lost edits: {sorted(expected - keys)}"
-
-
-def _allow_worker(path: str, prefix: str, repeat: int) -> None:
-    """Record ``repeat`` distinct duplication exceptions from another process."""
-    from df12_python_lints.duplication.allowlist import (
-        record_allow_entry,
-    )
-
-    for index in range(repeat):
-        record_allow_entry(
-            pathlib.Path(path),
-            members=[f"{prefix}{index}.py", f"{prefix}{index}b.py"],
-            reason="r",
-        )
-
-
-class TestConcurrentAllow:
-    """``allow`` processes sharing one manifest keep every entry."""
-
-    def test_concurrent_allow_commands_keep_every_entry(
+    def test_concurrent_set_and_allow_workers_keep_every_edit(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """Four processes each record entries; none may be lost or duplicated."""
+        """Eight processes mix generic edits and ``allow`` runs; all survive."""
         manifest = _write_manifest(tmp_path)
-        context = multiprocessing.get_context("spawn")
-        workers = [
-            context.Process(target=_allow_worker, args=(str(manifest), f"p{n}_", 6))
-            for n in range(4)
+        jobs = [
+            (manifest, [("set", f"p{n}_{i}") for i in range(6)]) for n in range(4)
+        ] + [
+            (manifest, [("allow", f"a{n}_{i}.py") for i in range(4)]) for n in range(4)
         ]
-        for process in workers:
-            process.start()
-        for process in workers:
-            process.join(timeout=120)
-            assert process.exitcode == 0, "a worker failed"
-        entries = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"][
-            "duplication_gate"
-        ]["allow"]
-        assert len(entries) == 24, f"expected 24 entries, found {len(entries)}"
+        run_workers(jobs)
+        data = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]
+        assert len(data["probe"]) == 24, "every generic edit must survive"
+        assert len(data["duplication_gate"]["allow"]) == 16, "every allow entry"
+
+    @settings(
+        max_examples=12,
+        deadline=None,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    @given(
+        plans=st.lists(
+            st.lists(
+                st.tuples(st.sampled_from(["set", "noop"]), st.sampled_from(_KEYS)),
+                min_size=1,
+                max_size=5,
+            ),
+            min_size=2,
+            max_size=4,
+        ),
+        spell_with_symlink=st.booleans(),
+    )
+    @pytest.mark.timeout(240)
+    def test_any_interleaving_of_edits_converges_to_their_union(
+        self,
+        plans: list[list[tuple[str, str]]],
+        spell_with_symlink: bool,  # ruff: ignore[boolean-type-hint-positional-argument] - a Hypothesis-injected argument.
+    ) -> None:
+        """The final manifest holds exactly the keys that some worker set.
+
+        Worker counts, operation sequences (duplicates and no-ops included) and
+        the spelling of the manifest path (real path or symlink) all vary.
+        """
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            manifest = _write_manifest(root / "real")
+            link = root / "link.toml"
+            link.symlink_to(manifest)
+            jobs = [
+                (link if spell_with_symlink and index % 2 else manifest, plan)
+                for index, plan in enumerate(plans)
+            ]
+            run_workers(jobs)
+            expected = {key for plan in plans for op, key in plan if op == "set"}
+            data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+            actual = set(data.get("tool", {}).get("probe", {}))
+        assert actual == expected, f"lost or invented edits: {actual ^ expected}"

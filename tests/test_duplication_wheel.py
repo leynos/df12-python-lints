@@ -15,7 +15,10 @@ import pytest
 from duplication_support import Script, make_repository, report, write_fake_nose
 from wheel_support import PYTHONS, UV, install_environment, run
 
-pytestmark = pytest.mark.skipif(UV is None, reason="needs uv to build and install")
+pytestmark = [
+    pytest.mark.skipif(UV is None, reason="needs uv to build and install"),
+    pytest.mark.timeout(900),
+]
 
 if typ.TYPE_CHECKING:
     import pathlib

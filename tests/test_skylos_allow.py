@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import multiprocessing
 import tomllib
 import typing as typ
 
 import pytest
 from skylos_support import POLICY, make_repository
+from worker_support import run_workers
 
 from df12_python_lints._errors import ToolConfigError
 from df12_python_lints.skylos import cli
 from df12_python_lints.skylos.allow import record_whitelist_entry, validate_symbol
 
 if typ.TYPE_CHECKING:
-    import collections.abc as cabc
     import pathlib
 
 
@@ -214,70 +213,26 @@ class TestRecording:
         assert manifest.read_bytes() == before
 
 
-def _skylos_worker(path: str, prefix: str, repeat: int) -> None:
-    """Record ``repeat`` distinct Skylos exceptions from another process."""
-    import pathlib as pl
-
-    for index in range(repeat):
-        record_whitelist_entry(pl.Path(path), symbol=f"{prefix}{index}", reason="r")
-
-
-def _nose_worker(path: str, prefix: str, repeat: int) -> None:
-    """Record ``repeat`` distinct duplication exceptions from another process."""
-    import pathlib as pl
-
-    from df12_python_lints.duplication.allowlist import (
-        record_allow_entry,
-    )
-
-    for index in range(repeat):
-        record_allow_entry(
-            pl.Path(path),
-            members=[f"{prefix}{index}.py", f"{prefix}{index}b.py"],
-            reason="r",
-        )
-
-
-def _run_workers(
-    manifest: pathlib.Path, workers: list[tuple[cabc.Callable[..., None], str]]
-) -> None:
-    """Start one spawned process per worker and require clean exits."""
-    context = multiprocessing.get_context("spawn")
-    processes = [
-        context.Process(target=target, args=(str(manifest), prefix, 6))
-        for target, prefix in workers
-    ]
-    for process in processes:
-        process.start()
-    for process in processes:
-        process.join(timeout=180)
-        assert process.exitcode == 0, "a worker failed"
-
-
 class TestConcurrentAuthoring:
     """Real concurrent processes share one lock protocol."""
 
     def test_skylos_with_skylos_loses_nothing(self, tmp_path: pathlib.Path) -> None:
         """Four processes recording symbols keep every symbol."""
         manifest = _manifest(tmp_path)
-        _run_workers(manifest, [(_skylos_worker, f"p{n}_") for n in range(4)])
+        run_workers([
+            (manifest, [("skylos", f"p{n}_{i}") for i in range(6)]) for n in range(4)
+        ])
         assert len(_documented(manifest)) == 24
 
     def test_skylos_with_nose_loses_nothing(self, tmp_path: pathlib.Path) -> None:
         """Skylos and nose authoring on one manifest keep both sets of edits."""
         manifest = _manifest(tmp_path)
-        _run_workers(
-            manifest,
-            [
-                (_skylos_worker, "s0_"),
-                (_nose_worker, "n0_"),
-                (_skylos_worker, "s1_"),
-                (_nose_worker, "n1_"),
-            ],
-        )
-        data = tomllib.loads(manifest.read_text(encoding="utf-8"))
-        assert len(data["tool"]["skylos"]["whitelist"]["documented"]) == 12, (
-            "Skylos edits"
-        )
-        assert len(data["tool"]["duplication_gate"]["allow"]) == 12, "nose edits"
-        assert data["tool"]["skylos"]["gate"]["strict"] is True, "unrelated policy"
+        jobs = []
+        for n in range(2):
+            jobs.append((manifest, [("skylos", f"s{n}_{i}") for i in range(6)]))
+            jobs.append((manifest, [("allow", f"n{n}_{i}.py") for i in range(6)]))
+        run_workers(jobs)
+        data = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]
+        assert len(data["skylos"]["whitelist"]["documented"]) == 12, "Skylos edits"
+        assert len(data["duplication_gate"]["allow"]) == 12, "nose edits"
+        assert data["skylos"]["gate"]["strict"] is True, "unrelated policy"

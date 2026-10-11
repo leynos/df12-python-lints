@@ -375,11 +375,15 @@ df12-duplication install --repository .
 ```
 
 `--repository` defaults to the invocation directory and selects the target
-`pyproject.toml`. The command never derives the target from where it is
-installed, never changes the process working directory, and ignores
-`PYTHONPATH`. Relative paths (the roots, and a relative `--binary`) resolve
-against the selected repository. `--version` prints the package version, and
-`--help` lists every option.
+`pyproject.toml`. `--timeout <seconds>` (default 120) bounds each detector
+invocation, including the version check that `check` runs and the one `install`
+uses to prove the binary; a timeout is a failed analysis and exits `2`. The
+command never derives the target from where it is installed, never changes the
+process working directory, and ignores `PYTHONPATH`. Relative paths (the roots,
+and a relative `--binary`) resolve against the selected repository. `--version`
+prints the package version, and `--help` lists every option. `--verbose`
+(before the subcommand) logs one record per operation and one per subprocess or
+download to standard error.
 
 ### Exit status
 
@@ -445,9 +449,10 @@ lock. `check` has no such requirement.
   cause this. Review it; the command never deletes or widens an exception.
 - Exceptions are applied after nose ranks and caps its report, so allowed
   families consume places in the budget. When the detector returns fewer
-  families than it found, the command warns that the report budget is saturated
-  and that the remaining families are not enforced. Setting `top = 0` enforces
-  every family, and is a policy change to review separately.
+  families than it found, the command warns, and if nothing blocks it **fails
+  closed with status `2`**: a capped report that shows nothing blocking cannot
+  prove the unseen families clean. Set `top = 0` (every family) or raise `top`
+  above the total, and adjudicate the families that become visible.
 
 ### The detector binary
 

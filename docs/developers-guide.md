@@ -172,22 +172,26 @@ the first *n* matches) are unchanged.
 by nothing else in the package, so the Pylint plugin and `ambrleaks` load none
 of it.
 
-| Module                        | Responsibility                                                                   |
-| ----------------------------- | -------------------------------------------------------------------------------- |
-| `cli.py`                      | argparse surface and the explicit context construction                           |
-| `context.py`                  | `RunContext`, the subprocess boundary and repository resolution                  |
-| `settings.py`                 | `[tool.nose]` validation                                                         |
-| `detector.py`                 | binary resolution, argument vector, native-config containment, report adaptation |
-| `schema.py`                   | the consumed report fields and findings                                          |
-| `allowlist.py`                | key matching, whole-family exceptions, idempotent authoring                      |
-| `install.py`, `releases.json` | explicit, digest-verified, binary-only provisioning                              |
-| `commands.py`                 | `check`, `allow` and `install`, and the exit statuses                            |
+| Module                        | Responsibility                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `cli.py`                      | argparse surface and the explicit context construction                                          |
+| `context.py`                  | `RunContext`, the subprocess boundary and repository resolution                                 |
+| `settings.py`                 | `[tool.nose]` validation                                                                        |
+| `detector.py`                 | binary resolution, argument vector, containment arguments and report adaptation; writes nothing |
+| `schema.py`                   | the consumed report fields and findings                                                         |
+| `policy.py`                   | the pure domain: allow keys, whole-family matching, partition of findings                       |
+| `allowlist.py`                | reading `[[tool.duplication_gate.allow]]` and recording entries                                 |
+| `release.py`, `releases.json` | digest table, URL trust and archive verification                                                |
+| `install.py`                  | explicit, digest-verified, binary-only provisioning                                             |
+| `commands.py`                 | `check`, `allow` and `install`, the exit statuses and the neutral native-configuration files    |
 
 Shared primitives live beside the package root so the Skylos command can reuse
 them: `_manifest.py` (the comment-preserving edit transaction and its single
 lock protocol: an advisory `flock` on a stable `.<name>.df12.lock` sidecar of
 the resolved manifest, held across read, validation, edit and atomic
-replacement), `_atomic.py`, `_validate.py`, `_errors.py` and `_pathglob.py`.
+replacement), `_atomic.py`, `_validate.py`, `_errors.py`, `_log.py` (structured
+boundary logging, silent unless `--verbose`) and `_pathglob.py`. The design
+decisions are recorded in [ADR 002](adr-002-df12-duplication-command.md).
 
 `_pathglob.py` supplies `PurePosixPath.full_match` on Python 3.12 by porting
 CPython's `glob.translate` and `fnmatch` translation. On 3.13 and later it

@@ -70,8 +70,18 @@ def manifest_lock(target: pathlib.Path) -> cabc.Iterator[None]:
     except ImportError as error:
         msg = "editing a manifest needs POSIX advisory locks (Linux or macOS)"
         raise ToolPlatformError(msg) from error
-    with lock_path_for(target).open("a+", encoding="utf-8") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+    lock_path = lock_path_for(target)
+    try:
+        lock = lock_path.open("a+", encoding="utf-8")
+    except OSError as error:
+        msg = f"cannot open the manifest lock {lock_path}: {error}"
+        raise ToolExecutionError(msg) from error
+    with lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        except OSError as error:
+            msg = f"cannot lock {lock_path}: {error}"
+            raise ToolExecutionError(msg) from error
         try:
             yield
         finally:

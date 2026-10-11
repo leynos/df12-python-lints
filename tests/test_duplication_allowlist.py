@@ -10,13 +10,15 @@ from duplication_support import dedent, make_repository
 
 from df12_python_lints._errors import ToolConfigError
 from df12_python_lints.duplication.allowlist import (
-    AllowEntry,
-    key_matches,
     load_allowlist,
     record_allow_entry,
+)
+from df12_python_lints.duplication.policy import (
+    AllowEntry,
+    key_matches,
+    partition_findings,
     validate_key,
 )
-from df12_python_lints.duplication.commands import partition_findings
 from df12_python_lints.duplication.schema import Finding, Location
 
 if typ.TYPE_CHECKING:

@@ -23,6 +23,10 @@ import typing as typ
 
 _SEPARATOR = "/"
 _NOT_SEPARATOR = "[^/]"
+_ONE_LAST_SEGMENT = f"{_NOT_SEPARATOR}+"
+_ONE_SEGMENT = f"{_ONE_LAST_SEGMENT}/"
+_ANY_SEGMENTS = "(?:.+/)?"
+_ANY_LAST_SEGMENTS = ".*"
 _SETOPS = re.compile(r"([&~|])").sub
 
 
@@ -74,27 +78,28 @@ def _compile(pattern: str) -> re.Pattern[str]:
 
 def _translate(pattern: str) -> str:
     """Translate a normalized glob into a regular expression (``glob.translate``)."""
-    one_last_segment = f"{_NOT_SEPARATOR}+"
-    one_segment = f"{one_last_segment}/"
-    any_segments = "(?:.+/)?"
-    any_last_segments = ".*"
-    results: list[str] = []
     parts = pattern.split(_SEPARATOR)
-    last_index = len(parts) - 1
-    for index, part in enumerate(parts):
-        if part == "*":
-            results.append(one_segment if index < last_index else one_last_segment)
-        elif part == "**":
-            if index == last_index:
-                results.append(any_last_segments)
-            elif parts[index + 1] != "**":
-                results.append(any_segments)
-        else:
-            if part:
-                results.extend(_translate_segment(part))
-            if index < last_index:
-                results.append("/")
-    return rf"(?s:{''.join(results)})\Z"
+    last = len(parts) - 1
+    regexes = (_part_regex(parts, index, last) for index in range(len(parts)))
+    return rf"(?s:{''.join(regexes)})\Z"
+
+
+def _part_regex(parts: list[str], index: int, last: int) -> str:
+    """Return the regular expression for the path segment at ``index``."""
+    part = parts[index]
+    if part == "*":
+        return _ONE_SEGMENT if index < last else _ONE_LAST_SEGMENT
+    if part == "**":
+        return _recursive_regex(parts, index, last)
+    body = "".join(_translate_segment(part))
+    return body if index == last else f"{body}/"
+
+
+def _recursive_regex(parts: list[str], index: int, last: int) -> str:
+    """Return the expression for a ``**`` segment; adjacent ones collapse."""
+    if index == last:
+        return _ANY_LAST_SEGMENTS
+    return "" if parts[index + 1] == "**" else _ANY_SEGMENTS
 
 
 def _translate_segment(part: str) -> list[str]:
@@ -104,21 +109,25 @@ def _translate_segment(part: str) -> list[str]:
     keep fnmatch's range, negation and set-operation escaping rules.
     """
     res: list[str] = []
-    i, n = 0, len(part)
-    while i < n:
+    i = 0
+    while i < len(part):
         c = part[i]
         i += 1
         if c == "*":
             res.append(f"{_NOT_SEPARATOR}*")
-            while i < n and part[i] == "*":
-                i += 1
-        elif c == "?":
-            res.append(_NOT_SEPARATOR)
+            i = _skip_stars(part, i)
         elif c == "[":
             i = _translate_set(part, i, res)
         else:
-            res.append(re.escape(c))
+            res.append(_NOT_SEPARATOR if c == "?" else re.escape(c))
     return res
+
+
+def _skip_stars(part: str, index: int) -> int:
+    """Return the index after any run of ``*`` characters starting at ``index``."""
+    while index < len(part) and part[index] == "*":
+        index += 1
+    return index
 
 
 def _translate_set(part: str, start: int, res: list[str]) -> int:
@@ -133,15 +142,13 @@ def _translate_set(part: str, start: int, res: list[str]) -> int:
 
 def _closing_bracket(part: str, start: int) -> int | None:
     """Return the index of the ``]`` closing a set opened before ``start``."""
-    n = len(part)
-    j = start
-    if j < n and part[j] == "!":
-        j += 1
-    if j < n and part[j] == "]":
-        j += 1
-    while j < n and part[j] != "]":
-        j += 1
-    return None if j >= n else j
+    index = start
+    if part[index : index + 1] == "!":
+        index += 1
+    if part[index : index + 1] == "]":
+        index += 1
+    found = part.find("]", index)
+    return None if found < 0 else found
 
 
 def _set_expression(stuff: str) -> str:
@@ -152,34 +159,48 @@ def _set_expression(stuff: str) -> str:
         return "."
     stuff = _SETOPS(r"\\\1", stuff)
     if stuff[0] == "!":
-        stuff = "^" + stuff[1:]
-    elif stuff[0] in {"^", "["}:
-        stuff = "\\" + stuff
-    return f"[{stuff}]"
+        return "[^" + stuff[1:] + "]"
+    return "[\\" + stuff + "]" if stuff[0] in {"^", "["} else f"[{stuff}]"
 
 
 def _set_body(part: str, start: int, end: int) -> str:
     """Return the escaped body of the bracket expression ``part[start:end]``."""
     stuff = part[start:end]
     if "-" not in stuff:
-        return stuff.replace("\\", r"\\")
+        return _escape_backslash(stuff)
+    chunks = _merge_ranges(_range_chunks(part, start, end))
+    return "-".join(_escape_backslash(c).replace("-", r"\-") for c in chunks)
+
+
+def _escape_backslash(text: str) -> str:
+    """Escape backslashes for use inside a regular-expression set."""
+    return text.replace("\\", r"\\")
+
+
+def _range_chunks(part: str, start: int, end: int) -> list[str]:
+    """Split a set body at the hyphens that form ranges."""
     chunks: list[str] = []
-    i = start
-    k = i + 2 if part[i] == "!" else i + 1
+    index = start
+    found = start + 2 if part[start] == "!" else start + 1
     while True:
-        k = part.find("-", k, end)
-        if k < 0:
+        found = part.find("-", found, end)
+        if found < 0:
             break
-        chunks.append(part[i:k])
-        i = k + 1
-        k += 3
-    chunk = part[i:end]
-    if chunk:
-        chunks.append(chunk)
+        chunks.append(part[index:found])
+        index = found + 1
+        found += 3
+    tail = part[index:end]
+    if tail:
+        chunks.append(tail)
     else:
         chunks[-1] += "-"
+    return chunks
+
+
+def _merge_ranges(chunks: list[str]) -> list[str]:
+    """Drop empty ranges, which are invalid in a regular expression."""
     for index in range(len(chunks) - 1, 0, -1):
         if chunks[index - 1][-1] > chunks[index][0]:
             chunks[index - 1] = chunks[index - 1][:-1] + chunks[index][1:]
             del chunks[index]
-    return "-".join(c.replace("\\", r"\\").replace("-", r"\-") for c in chunks)
+    return chunks
