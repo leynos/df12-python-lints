@@ -1,0 +1,4 @@
+exit: 0
+--- stdout
+skylos gate passed (skylos 4.33.2 under Python 3.12+)
+--- stderr

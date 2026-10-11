@@ -40,7 +40,9 @@ class TestReportNormalization:
         """A report that shows fewer families than exist is saturated."""
         found = family(location("a.py"), location("b.py"))
         result = normalize_report(json.loads(report(found, total=30)))
-        assert (result.total, result.shown, result.is_saturated) == (30, 1, True)
+        assert (result.total, result.shown, result.is_saturated) == (30, 1, True), (
+            "expected: (result.total, result.shown, result.is_saturated) == (30, 1,..."
+        )
 
     @pytest.mark.parametrize(
         ("mutate", "fragment"),
@@ -84,7 +86,7 @@ class TestSettings:
             PINNED,
             ("src",),
             30,
-        )
+        ), "expected: (settings.version, settings.roots, settings.top) == ( PINNED,..."
 
     def test_top_zero_means_unlimited_and_is_accepted(
         self, tmp_path: pathlib.Path

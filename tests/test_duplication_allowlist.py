@@ -80,7 +80,9 @@ class TestWholeFamilyScope:
         blocking, allowed, unmatched = partition_findings(
             [family], [self._entry("a.py::f", "b.py::f")]
         )
-        assert (len(blocking), len(allowed), len(unmatched)) == (0, 1, 0)
+        assert (len(blocking), len(allowed), len(unmatched)) == (0, 1, 0), (
+            "expected: (len(blocking), len(allowed), len(unmatched)) == (0, 1, 0)"
+        )
 
     def test_a_third_unlisted_copy_blocks(self) -> None:
         """Adding a copy outside the entry's keys makes the family block again."""
@@ -107,7 +109,9 @@ class TestWholeFamilyScope:
         blocking, allowed, unmatched = partition_findings(
             [], [self._entry("x.py", "y.py")]
         )
-        assert (blocking, allowed, len(unmatched)) == ([], [], 1)
+        assert (blocking, allowed, len(unmatched)) == ([], [], 1), (
+            "expected: (blocking, allowed, len(unmatched)) == ([], [], 1)"
+        )
 
 
 class TestKeyValidation:
@@ -127,7 +131,9 @@ class TestKeyValidation:
     )
     def test_accepted(self, key: str) -> None:
         """Well-formed keys pass through unchanged."""
-        assert validate_key(key, context="--member") == key
+        assert validate_key(key, context="--member") == key, (
+            "expected: validate_key(key, context='--member') == key"
+        )
 
 
 class TestLoading:
@@ -154,7 +160,9 @@ class TestLoading:
                 """
             ),
         )
-        assert [e.keys for e in entries] == [("a.py::f",), ("a.py", "b.py")]
+        assert [e.keys for e in entries] == [("a.py::f",), ("a.py", "b.py")], (
+            "expected: [e.keys for e in entries] == [('a.py::f',), ('a.py', 'b.py')]"
+        )
 
     @pytest.mark.parametrize(
         ("body", "fragment"),
@@ -199,8 +207,12 @@ class TestAuthoring:
         entries = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"][
             "duplication_gate"
         ]["allow"]
-        assert entries[0] == {"unit": "a.py::f", "reason": "one"}
-        assert entries[1] == {"members": ["a.py", "b.py", "c.py"], "reason": "three"}
+        assert entries[0] == {"unit": "a.py::f", "reason": "one"}, (
+            "expected: entries[0] == {'unit': 'a.py::f', 'reason': 'one'}"
+        )
+        assert entries[1] == {"members": ["a.py", "b.py", "c.py"], "reason": "three"}, (
+            "expected: entries[1] == {'members': ['a.py', 'b.py', 'c.py'], 'reason':..."
+        )
 
     def test_same_member_set_updates_the_reason_without_duplicating(
         self, tmp_path: pathlib.Path
@@ -210,16 +222,16 @@ class TestAuthoring:
         assert (
             record_allow_entry(manifest, members=["a.py", "b.py"], reason="r1")
             == "added"
-        )
+        ), "expected: record_allow_entry(manifest, members=['a.py', 'b.py'], reason..."
         assert (
             record_allow_entry(manifest, members=["b.py", "a.py"], reason="r2")
             == "updated"
-        )
+        ), "expected: record_allow_entry(manifest, members=['b.py', 'a.py'], reason..."
         before = manifest.read_bytes()
         assert (
             record_allow_entry(manifest, members=["a.py", "b.py"], reason="r2")
             == "unchanged"
-        )
+        ), "expected: record_allow_entry(manifest, members=['a.py', 'b.py'], reason..."
         assert manifest.read_bytes() == before, "an unchanged request must not rewrite"
         data = tomllib.loads(before.decode())
         assert len(data["tool"]["duplication_gate"]["allow"]) == 1, "no duplicate entry"
@@ -264,7 +276,9 @@ class TestAuthoring:
         before = manifest.read_bytes()
         with pytest.raises(ToolConfigError, match="control characters"):
             record_allow_entry(manifest, members=["a.py"], reason=f"bad{control}x")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )
 
     def test_shell_sensitive_unicode_reason_is_preserved_literally(
         self, tmp_path: pathlib.Path
@@ -276,7 +290,9 @@ class TestAuthoring:
         entry = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"][
             "duplication_gate"
         ]["allow"][0]
-        assert entry == {"unit": "a b.py::f g", "reason": reason}
+        assert entry == {"unit": "a b.py::f g", "reason": reason}, (
+            "expected: entry == {'unit': 'a b.py::f g', 'reason': reason}"
+        )
 
     def test_comments_unrelated_tables_and_mode_are_preserved(
         self, tmp_path: pathlib.Path
@@ -302,7 +318,9 @@ class TestAuthoring:
         (link_dir / "pyproject.toml").symlink_to(manifest)
         record_allow_entry(link_dir / "pyproject.toml", members=["a.py"], reason="r")
         assert (link_dir / "pyproject.toml").is_symlink(), "the symlink must survive"
-        assert "duplication_gate" in manifest.read_text(encoding="utf-8")
+        assert "duplication_gate" in manifest.read_text(encoding="utf-8"), (
+            "expected: 'duplication_gate' in manifest.read_text(encoding='utf-8')"
+        )
 
     def test_inline_allow_array_is_refused_without_writing(
         self, tmp_path: pathlib.Path
@@ -315,4 +333,6 @@ class TestAuthoring:
         before = manifest.read_bytes()
         with pytest.raises(ToolConfigError, match="tables to be edited"):
             record_allow_entry(manifest, members=["b.py"], reason="r")
-        assert manifest.read_bytes() == before
+        assert manifest.read_bytes() == before, (
+            "expected: manifest.read_bytes() == before"
+        )

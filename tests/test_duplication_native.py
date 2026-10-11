@@ -104,7 +104,7 @@ def _repo(
 
 def _check(repo: pathlib.Path) -> int:
     """Run ``check`` against ``repo`` with the real binary."""
-    assert _BINARY is not None
+    assert _BINARY is not None, "expected: _BINARY is not None"
     return cli.main(["check", "--repository", str(repo), "--binary", str(_BINARY)])
 
 
@@ -122,14 +122,20 @@ class TestVerdicts:
             "src/a.py": _CLONE.format(name="a"),
             "src/b.py": _OTHER.format(name="b"),
         }
-        assert _check(_repo(tmp_path, files)) == 0
+        assert _check(_repo(tmp_path, files)) == 0, (
+            "expected: _check(_repo(tmp_path, files)) == 0"
+        )
 
     def test_planted_clone_blocks(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Two copies of one function block the gate."""
-        assert _check(_repo(tmp_path, _clones(2))) == 1
-        assert "src/m0.py" in capsys.readouterr().out
+        assert _check(_repo(tmp_path, _clones(2))) == 1, (
+            "expected: _check(_repo(tmp_path, _clones(2))) == 1"
+        )
+        assert "src/m0.py" in capsys.readouterr().out, (
+            "expected: 'src/m0.py' in capsys.readouterr().out"
+        )
 
     def test_allowed_pair_passes_and_a_third_copy_blocks(
         self, tmp_path: pathlib.Path
@@ -153,7 +159,9 @@ class TestVerdicts:
             "one/a.py": _CLONE.format(name="a"),
             "two/b.py": _CLONE.format(name="b"),
         }
-        assert _check(_repo(tmp_path, files, roots='["one", "two"]')) == 1
+        assert _check(_repo(tmp_path, files, roots='["one", "two"]')) == 1, (
+            "expected: _check(_repo(tmp_path, files, roots='['one', 'two']')) == 1"
+        )
 
 
 class TestEmptyAndMissingScans:
@@ -161,19 +169,21 @@ class TestEmptyAndMissingScans:
 
     def test_missing_root_is_an_error(self, tmp_path: pathlib.Path) -> None:
         """A configured root that does not exist fails fast."""
-        assert _check(_repo(tmp_path, {"src/a.py": "x = 1\n"}, roots='["nope"]')) == 2
+        assert (
+            _check(_repo(tmp_path, {"src/a.py": "x = 1\n"}, roots='["nope"]')) == 2
+        ), "expected: _check(_repo(tmp_path, {'src/a.py': 'x = 1'n'}, roots='['nope..."
 
     def test_root_without_supported_source_is_an_error(
         self, tmp_path: pathlib.Path
     ) -> None:
         """Nose exits 0 with a warning; the gate must still refuse."""
         repo = _repo(tmp_path, {"src/readme.txt": "text\n"})
-        assert _check(repo) == 2
+        assert _check(repo) == 2, "expected: _check(repo) == 2"
 
     def test_fully_excluded_root_is_an_error(self, tmp_path: pathlib.Path) -> None:
         """Excluding every file leaves an empty effective scan."""
         repo = _repo(tmp_path, _clones(2), extra='exclude = ["*.py"]\n')
-        assert _check(repo) == 2
+        assert _check(repo) == 2, "expected: _check(repo) == 2"
 
     def test_wrong_pinned_version_is_an_error(self, tmp_path: pathlib.Path) -> None:
         """The binary must report exactly the pinned version."""
@@ -184,7 +194,7 @@ class TestEmptyAndMissingScans:
             .replace(PINNED, "0.19.0")
         )
         (repo / "pyproject.toml").write_text(text, encoding="utf-8")
-        assert _check(repo) == 2
+        assert _check(repo) == 2, "expected: _check(repo) == 2"
 
 
 class TestNativeConfigurationCannotSuppress:
@@ -209,7 +219,7 @@ class TestNativeConfigurationCannotSuppress:
         """An invalid ambient file is not read at all."""
         repo = _repo(tmp_path, _clones(2))
         (repo / "nose.toml").write_text("this is [not toml", encoding="utf-8")
-        assert _check(repo) == 1
+        assert _check(repo) == 1, "expected: _check(repo) == 1"
 
 
 class TestReportBudget:
@@ -232,8 +242,10 @@ class TestReportBudget:
             .replace("top = 30", "top = 1")
         )
         (repo / "pyproject.toml").write_text(text, encoding="utf-8")
-        assert _check(repo) == 1
-        assert "returned 1 of 2 families" in capsys.readouterr().err
+        assert _check(repo) == 1, "expected: _check(repo) == 1"
+        assert "returned 1 of 2 families" in capsys.readouterr().err, (
+            "expected: 'returned 1 of 2 families' in capsys.readouterr().err"
+        )
 
     def test_top_zero_reports_every_family(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
@@ -246,7 +258,7 @@ class TestReportBudget:
             .replace("top = 30", "top = 0")
         )
         (repo / "pyproject.toml").write_text(text, encoding="utf-8")
-        assert _check(repo) == 1
+        assert _check(repo) == 1, "expected: _check(repo) == 1"
         out = capsys.readouterr()
         assert "saturated" not in out.err, "an unlimited report is never saturated"
         assert out.out.count("(") >= 2, "both families are listed"
@@ -260,5 +272,9 @@ def test_real_binary_lets_the_unmatched_diagnostic_fire(
     allow = (
         '\n[[tool.duplication_gate.allow]]\nunit = "src/gone.py"\nreason = "was here"\n'
     )
-    assert _check(_repo(tmp_path, files, extra=allow)) == 0
-    assert "unmatched in this scan" in capsys.readouterr().err
+    assert _check(_repo(tmp_path, files, extra=allow)) == 0, (
+        "expected: _check(_repo(tmp_path, files, extra=allow)) == 0"
+    )
+    assert "unmatched in this scan" in capsys.readouterr().err, (
+        "expected: 'unmatched in this scan' in capsys.readouterr().err"
+    )

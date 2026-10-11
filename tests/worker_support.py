@@ -24,6 +24,7 @@ _WORKER = """
 import json, pathlib, sys
 from df12_python_lints import _manifest
 from df12_python_lints.duplication.allowlist import record_allow_entry
+from df12_python_lints.skylos.allow import record_whitelist_entry
 
 path = pathlib.Path(sys.argv[1])
 
@@ -44,6 +45,8 @@ for operation, argument in json.loads(sys.argv[2]):
         _manifest.edit_manifest(path, lambda document: False, extra="duplication")
     elif operation == "allow":
         record_allow_entry(path, members=[argument, argument + "-b"], reason="r")
+    elif operation == "skylos":
+        record_whitelist_entry(path, symbol=argument, reason="r")
     else:
         raise SystemExit(f"unknown operation {operation!r}")
 """
@@ -63,7 +66,8 @@ def run_workers(
     jobs : collections.abc.Sequence
         Pairs of manifest spelling and operations. ``("set", key)``
         sets ``[tool.probe].key``, ``("noop", "")`` makes an edit that changes
-        nothing, and ``("allow", member)`` records a duplication exception.
+        nothing, and ``("allow", member)`` records a duplication exception and
+        ``("skylos", symbol)`` a documented Skylos exception.
     timeout : int
         Seconds to wait for each child.
     """

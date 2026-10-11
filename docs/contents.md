@@ -15,6 +15,8 @@ documentation set.
 - [Version 0.2.0 migration guide](migration-0.2.0.md) explains the new
   dataclass-slots rule, the reassigned message identifiers, and the required
   pylint configuration changes.
+- [Version 0.4.0 migration guide](migration-0.4.0.md) lists the two new console
+  commands, the optional extras and the behaviour to know about.
 - [Version 0.3.0 migration guide](migration-0.3.0.md) explains the expanded
   Ruff suppression grammar, explanation requirements, and neutral range
   terminators.
@@ -24,6 +26,11 @@ documentation set.
 - [ADR 002](adr-002-df12-duplication-command.md) records the boundaries, shared
   primitives, locking, installer verification and Python 3.12 decisions of the
   `df12-duplication` command.
+- [ADR 003](adr-003-df12-skylos-command.md) records the adapter, isolation,
+  configuration split, pin and authoring decisions of the `df12-skylos` command.
+- [Skylos gate migration guide](skylos-gate-migration.md) explains how to move
+  a Skylos Makefile target and its copied contract suites onto the installed
+  `df12-skylos` command, with a deletion checklist.
 - [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 

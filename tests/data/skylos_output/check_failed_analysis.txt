@@ -1,0 +1,5 @@
+exit: 2
+--- stdout
+x.py:1  SKY-ANALYSIS-INCOMPLETE  e
+--- stderr
+error: skylos reported an invalid configuration or an incomplete analysis (exit status 2); a failed analysis is never a clean gate

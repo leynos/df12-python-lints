@@ -1,0 +1,5 @@
+exit: 2
+--- stdout
+--- stderr
+WARNING - No Python files found in pkg
+configuration error: skylos found no Python files in a configured root (pkg): check tool.df12_skylos.roots and tool.skylos.exclude

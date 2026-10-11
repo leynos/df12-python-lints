@@ -1,0 +1,4 @@
+subprocess program=n exit_status=0 elapsed_seconds=<t>
+subprocess program=n exit_status=0 elapsed_seconds=<t>
+check detector=nose-0.20.0 families_total=1 families_shown=1 blocking=1 allowed=0 unmatched=0
+operation=check outcome=blocking exit_status=1 elapsed_seconds=<t>

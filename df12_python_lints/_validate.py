@@ -155,3 +155,20 @@ def require_reason(value: object, *, context: str) -> str:
         msg = f"{context} must not contain control characters"
         raise ToolConfigError(msg)
     return text
+
+
+def require_string_or_list(value: object, *, context: str) -> None:
+    """Accept a non-blank string or a non-empty array of non-blank strings.
+
+    Raises
+    ------
+    ToolConfigError
+        If ``value`` is neither.
+    """
+    if isinstance(value, str):
+        require_string(value, context=context)
+        return
+    if not is_sequence(value) or not value:
+        msg = f"{context} must be a non-empty string or array of strings"
+        raise ToolConfigError(msg)
+    require_string_tuple(value, context=context)

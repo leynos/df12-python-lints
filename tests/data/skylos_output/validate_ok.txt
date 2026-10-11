@@ -1,0 +1,4 @@
+exit: 0
+--- stdout
+skylos configuration valid: roots pkg; scan needs Python 3.12+
+--- stderr

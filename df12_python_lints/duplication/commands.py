@@ -26,6 +26,8 @@ from .settings import load_settings
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from df12_python_lints._runtime import Streams
+
     from .context import RunContext
     from .policy import AllowEntry
     from .schema import DetectorReport, Finding
@@ -38,13 +40,6 @@ ALLOW_HINT = (
     "df12-duplication allow --member '<path[::name]>' [--member '<path[::name]>' ...] "
     "--reason '<why this stays>'"
 )
-
-
-class Streams(typ.NamedTuple):
-    """Where a command writes its report and its diagnostics."""
-
-    out: typ.TextIO
-    err: typ.TextIO
 
 
 @contextlib.contextmanager
