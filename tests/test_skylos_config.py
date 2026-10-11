@@ -296,13 +296,13 @@ def test_generated_unsafe_roots_are_rejected(
 ) -> None:
     """Traversal, symlink-escape, option-like and absolute spellings are refused."""
     repo = _roots_repo(tmp_path_factory)
-    if unsafe == "":
+    if not unsafe:
         root = "/" + "/".join([*prefix, *suffix]) if absolute else "/x"
     elif unsafe == "-x":
         root = "-x" + "/".join(["", *suffix])
     else:
         root = "/".join([*prefix, unsafe, *suffix])
-    if root.strip("/") == "" and not root.startswith("/"):
+    if not root.strip("/") and not root.startswith("/"):
         return
     with pytest.raises(ToolConfigError):
         _load(repo, root)

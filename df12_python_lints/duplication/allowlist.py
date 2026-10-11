@@ -91,9 +91,7 @@ def record_allow_entry(
         If the reason or a key is invalid, or the manifest is malformed.
         The manifest is left untouched.
     """
-    if not _validate.is_non_empty_string(reason):
-        msg = "--reason must not be empty"
-        raise ToolConfigError(msg)
+    _validate.require_reason(reason, context="--reason")
     keys = tuple(
         dict.fromkeys(validate_key(key, context="--member") for key in members)
     )

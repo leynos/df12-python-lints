@@ -6,6 +6,7 @@ import keyword
 import pathlib
 import tempfile
 import tomllib
+import unicodedata
 
 import pytest
 from hypothesis import given, settings
@@ -146,6 +147,17 @@ class TestRecording:
             record_whitelist_entry(manifest, symbol="x", reason="3")
         assert manifest.read_bytes() == before
 
+    @pytest.mark.parametrize("control", ["\x1b", "\x00", "\x07", "\x7f", "\r"])
+    def test_a_reason_with_a_control_character_is_rejected(
+        self, tmp_path: pathlib.Path, control: str
+    ) -> None:
+        """Control characters cannot be written back readably, so they are refused."""
+        manifest = _manifest(tmp_path)
+        before = manifest.read_bytes()
+        with pytest.raises(ToolConfigError, match="control characters"):
+            record_whitelist_entry(manifest, symbol="x", reason=f"bad{control}x")
+        assert manifest.read_bytes() == before
+
     def test_runtime_entry_points_are_never_created(
         self, tmp_path: pathlib.Path
     ) -> None:
@@ -255,7 +267,12 @@ class TestConcurrentAuthoring:
 _IDENTIFIERS = st.from_regex(r"[A-Za-z_][A-Za-z0-9_]{0,12}", fullmatch=True).filter(
     lambda name: name.isidentifier() and not keyword.iskeyword(name)
 )
-_REASONS = st.text(min_size=1, max_size=40).filter(lambda text: text.strip() != "")
+_REASONS = st.text(min_size=1, max_size=40).filter(
+    lambda text: (
+        bool(text.strip())
+        and all(unicodedata.category(c) != "Cc" or c in "\n\t" for c in text)
+    )
+)
 
 
 @given(symbol=_IDENTIFIERS)

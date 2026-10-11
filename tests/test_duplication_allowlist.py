@@ -255,6 +255,17 @@ class TestAuthoring:
             record_allow_entry(manifest, members=members, reason=reason)
         assert manifest.read_bytes() == before, "invalid input must not mutate"
 
+    @pytest.mark.parametrize("control", ["\x1b", "\x00", "\x07", "\x7f", "\r"])
+    def test_a_reason_with_a_control_character_is_rejected(
+        self, tmp_path: pathlib.Path, control: str
+    ) -> None:
+        """Control characters cannot be written back readably, so they are refused."""
+        manifest = self._repo(tmp_path)
+        before = manifest.read_bytes()
+        with pytest.raises(ToolConfigError, match="control characters"):
+            record_allow_entry(manifest, members=["a.py"], reason=f"bad{control}x")
+        assert manifest.read_bytes() == before
+
     def test_shell_sensitive_unicode_reason_is_preserved_literally(
         self, tmp_path: pathlib.Path
     ) -> None:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import collections.abc as cabc
 import pathlib
 import typing as typ
+import unicodedata
 
 from ._errors import ToolConfigError
 
@@ -130,6 +131,30 @@ def require_integer(value: object, *, context: str, minimum: int) -> int:
         msg = f"{context} must be {kind}"
         raise ToolConfigError(msg)
     return value
+
+
+def require_reason(value: object, *, context: str) -> str:
+    r"""Validate a human-readable reason: non-blank, with no control characters.
+
+    Newlines and tabs are allowed. Other control characters cannot be written
+    portably: TOML 1.1 spells ESC ``\e``, which Python's ``tomllib`` cannot
+    read back, so such a reason would corrupt the manifest it was recorded in.
+
+    Raises
+    ------
+    ToolConfigError
+        If ``value`` is blank or holds a disallowed control character.
+
+    Examples
+    --------
+    >>> require_reason("Read at runtime.", context="--reason")
+    'Read at runtime.'
+    """
+    text = require_string(value, context=context)
+    if any(unicodedata.category(ch) == "Cc" and ch not in "\n\t" for ch in text):
+        msg = f"{context} must not contain control characters"
+        raise ToolConfigError(msg)
+    return text
 
 
 def require_string_or_list(value: object, *, context: str) -> None:

@@ -81,9 +81,7 @@ def record_whitelist_entry(pyproject: pathlib.Path, *, symbol: str, reason: str)
         If the request or the manifest is invalid; the manifest is untouched.
     """
     validate_symbol(symbol)
-    if not _validate.is_non_empty_string(reason):
-        msg = "--reason must not be empty"
-        raise ToolConfigError(msg)
+    _validate.require_reason(reason, context="--reason")
     outcome: list[str] = []
 
     def edit(document: tomlkit.TOMLDocument) -> bool:
