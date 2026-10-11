@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+import typing as typ
 
 import pytest
 from hypothesis import given
@@ -43,10 +44,11 @@ def _port(path: str, pattern: str) -> bool:
     return compiled.match(text) is not None
 
 
-def _corpus_rows() -> list[tuple[str, str, bool | str]]:
-    """Load the pinned 3.14 answers."""
-    rows = json.loads(_CORPUS.read_text(encoding="utf-8"))
-    return [(path, pattern, answer) for path, pattern, answer in rows]
+def _corpus_rows() -> list[list[typ.Any]]:
+    """Load the pinned 3.14 answers as ``[path, pattern, answer]`` rows."""
+    return typ.cast(
+        "list[list[typ.Any]]", json.loads(_CORPUS.read_text(encoding="utf-8"))
+    )
 
 
 class TestPortAgainstCorpus:
