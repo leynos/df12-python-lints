@@ -65,8 +65,8 @@ def _fetch(url: str) -> bytes:
         msg = f"cannot download the pinned nose release from GitHub: {error}"
         raise ToolExecutionError(msg) from error
     _LOG.info(
-        "download url=%s bytes=%d elapsed_seconds=%.3f",
-        url,
+        "download asset=%s bytes=%d elapsed_seconds=%.3f",
+        url.rsplit("/", 1)[-1],
         len(data),
         time.monotonic() - started,
     )

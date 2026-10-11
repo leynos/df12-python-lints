@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import pathlib
 import tempfile
 import typing as typ
@@ -18,6 +19,7 @@ from duplication_support import (
     report,
 )
 
+from df12_python_lints import _log
 from df12_python_lints._errors import ToolConfigError, ToolExecutionError
 from df12_python_lints._runtime import Streams
 from df12_python_lints.duplication import commands
@@ -289,6 +291,27 @@ class TestFailuresNeverPass:
             context_module.run_command(
                 [str(script)], tmp_path, {"PATH": "/bin:/usr/bin"}, 1
             )
+
+    def test_log_records_carry_the_program_name_never_its_path(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Even the timeout record names the program, not the absolute binary path."""
+        monkeypatch.setattr(_log.logger, "level", logging.NOTSET)
+        caplog.set_level(logging.DEBUG, logger="df12_python_lints")
+        script = tmp_path / "private-dir" / "slow.sh"
+        script.parent.mkdir()
+        script.write_text("#!/bin/sh\nexec sleep 5\n", encoding="utf-8")
+        script.chmod(0o755)
+        with pytest.raises(ToolExecutionError, match="timed out"):
+            context_module.run_command(
+                [str(script)], tmp_path, {"PATH": "/bin:/usr/bin"}, 1
+            )
+        records = [record.getMessage() for record in caplog.records]
+        assert any("program=slow.sh outcome=timeout" in m for m in records), records
+        assert not any("private-dir" in m for m in records), "no path in any record"
 
     def test_output_that_is_not_utf8_is_a_tool_error(
         self, tmp_path: pathlib.Path
