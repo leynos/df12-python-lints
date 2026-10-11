@@ -13,6 +13,7 @@ import pathlib
 import textwrap
 import typing as typ
 
+from df12_python_lints.duplication import cli
 from df12_python_lints.duplication.context import CommandResult
 
 if typ.TYPE_CHECKING:
@@ -190,3 +191,10 @@ def write_fake_nose(path: pathlib.Path, script: Script) -> pathlib.Path:
     path.write_text(body, encoding="utf-8")
     path.chmod(0o755)
     return path
+
+
+def check_scenario(tmp_path: pathlib.Path, stdout: str, *, extra: str = "") -> int:
+    """Run ``check`` against a repository whose detector prints ``stdout``."""
+    repo = make_repository(tmp_path / "repo", extra=extra)
+    write_fake_nose(repo / "n", Script(stdout=stdout))
+    return cli.main(["check", "--repository", str(repo), "--binary", "n"])
