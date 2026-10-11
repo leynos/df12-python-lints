@@ -127,6 +127,7 @@ class TestManifest:
             "http://github.com/corca-ai/nose/releases/download/v0.20.0/x.tar.xz",
             "https://evil.example/corca-ai/nose/releases/download/v0.20.0/x.tar.xz",
             "https://user@github.com/corca-ai/nose/releases/download/v0.20.0/x.tar.xz",
+            "https://notgithub.com/corca-ai/nose/releases/download/v0.20.0/x.tar.xz",
             "https://github.com:8443/corca-ai/nose/releases/download/v0.20.0/x.tar.xz",
             "https://github.com/other/nose/releases/download/v0.20.0/x.tar.xz",
             "https://github.com/corca-ai/nose/releases/download/v0.20.0/x.tar.xz?a=b",

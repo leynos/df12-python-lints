@@ -42,9 +42,8 @@ def main() -> None:
         cases.add((path, pattern))
     rows = [[path, pattern, _answer(path, pattern)] for path, pattern in sorted(cases)]
     target = pathlib.Path(__file__).with_name("full_match_corpus.json")
-    target.write_text(
-        json.dumps(rows, ensure_ascii=False, indent=0) + "\n", encoding="utf-8"
-    )
+    lines = (json.dumps(row, ensure_ascii=False) for row in rows)
+    target.write_text("[\n" + ",\n".join(lines) + "\n]\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
