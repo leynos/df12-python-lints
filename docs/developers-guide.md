@@ -166,6 +166,61 @@ or re-scanning. Baseline entries therefore follow discovery order rather than a
 sorted order; occurrence semantics (a fingerprint recorded *n* times suppresses
 the first *n* matches) are unchanged.
 
+## The duplication command
+
+`df12_python_lints/duplication/` implements `df12-duplication`. It is imported
+by nothing else in the package, so the Pylint plugin and `ambrleaks` load none
+of it.
+
+| Module                        | Responsibility                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `cli.py`                      | argparse surface and the explicit context construction                                          |
+| `context.py`                  | `RunContext`, the subprocess boundary and repository resolution                                 |
+| `settings.py`                 | `[tool.nose]` validation                                                                        |
+| `detector.py`                 | binary resolution, argument vector, containment arguments and report adaptation; writes nothing |
+| `schema.py`                   | the consumed report fields and findings                                                         |
+| `policy.py`                   | the pure domain: allow keys, whole-family matching, partition of findings                       |
+| `allowlist.py`                | reading `[[tool.duplication_gate.allow]]` and recording entries                                 |
+| `release.py`, `releases.json` | digest table, URL trust and archive verification                                                |
+| `install.py`                  | explicit, digest-verified, binary-only provisioning                                             |
+| `commands.py`                 | `check`, `allow` and `install`, the exit statuses and the neutral native-configuration files    |
+
+Shared primitives live beside the package root so the Skylos command can reuse
+them: `_manifest.py` (the comment-preserving edit transaction and its single
+lock protocol: an advisory `flock` on a stable `.<name>.df12.lock` sidecar of
+the resolved manifest, held across read, validation, edit and atomic
+replacement), `_atomic.py`, `_validate.py`, `_errors.py`, `_log.py` (structured
+boundary logging, silent unless `--verbose`) and `_pathglob.py`. The design
+decisions are recorded in [ADR 002](adr-002-df12-duplication-command.md).
+
+`_pathglob.py` supplies `PurePosixPath.full_match` on Python 3.12 by porting
+CPython's `glob.translate` and `fnmatch` translation. On 3.13 and later it
+delegates to the interpreter, so exception scope is the interpreter's own.
+`tests/data/full_match_corpus.json` pins 3.14 answers for 4000 cases and a
+Hypothesis differential test compares the port with the native method.
+Regenerate the corpus with `tests/data/generate_full_match_corpus.py` on 3.13+.
+
+The tests are layered: hermetic unit tests with a scripted subprocess boundary,
+a handful of bounded tests against the real pinned binary (skipped unless
+`NOSE_BIN` or `.tools/nose/nose` reports the pinned version; CI installs it with
+`df12-duplication install`), and non-editable wheel installations for Python
+3.12 and 3.14.
+
+### Provenance
+
+The implementation starts from the merged Episodic gate (`leynos/episodic` PR
+276, merge commit `d9e5ac0d254f375e2986f52d91a3b88c117c833b`; ISC licence, same
+copyright holder). It incorporates reviewed corrections from two unmerged
+ports: Cuprum PR 510 (head `3b00cf719d64a1c11330d90755530739df86b347`:
+empty-scan rejection through the detector's warning, repository-relative binary
+resolution, and the unmatched-entry diagnostics) and Falcon Pachinko PR 225
+(head `996b0f0d42c1f17493c9d39abcf2d5a69c074763`: explicit runtime contexts and
+the checksummed official-release installer). Deliberately discarded: the
+cyclopts front end and PEP 723 scripts, the `scripts` namespace imports, the
+cargo-binstall provisioning, the donors' own file-walking source preflight
+(`pathspec`), the per-file atomic-write module in favour of one shared helper,
+and the duplication-specific lock.
+
 ## Local workflow
 
 The public entrypoint for formatting, linting, typechecking, tests, and
