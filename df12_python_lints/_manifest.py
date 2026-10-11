@@ -99,7 +99,11 @@ def _release(fcntl: typ.Any, lock: typ.IO[str], lock_path: pathlib.Path) -> None
     try:
         fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
     except OSError as error:
-        _LOG.warning("lock release failed lock=%s error=%s", lock_path, error)
+        _LOG.warning(
+            "lock release failed lock=%s category=%s",
+            lock_path.name,
+            type(error).__name__,
+        )
 
 
 def resolve_manifest(path: pathlib.Path) -> pathlib.Path:

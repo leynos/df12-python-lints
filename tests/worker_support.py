@@ -83,7 +83,29 @@ def run_workers(
             )
             for path, ops in jobs
         ]
-        for child in children:
+        failures = _collect(children, timeout)
+    if failures:
+        pytest.fail("; ".join(failures))
+
+
+def _collect(children: list[subprocess.Popen[str]], timeout: int) -> list[str]:
+    """Wait for every child, killing and reaping any that time out.
+
+    Returns
+    -------
+    list[str]
+        One description per failed or timed-out child, reported only after
+        all of them have been reaped.
+    """
+    failures: list[str] = []
+    for child in children:
+        try:
             _, stderr = child.communicate(timeout=timeout)
-            if child.returncode != 0:
-                pytest.fail(f"a worker failed ({child.returncode}): {stderr}")
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.communicate()
+            failures.append(f"a worker timed out after {timeout} seconds")
+            continue
+        if child.returncode != 0:
+            failures.append(f"a worker failed ({child.returncode}): {stderr}")
+    return failures

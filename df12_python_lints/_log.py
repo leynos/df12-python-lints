@@ -2,10 +2,11 @@
 
 The commands are short-lived tools, so their observability is deliberately
 small: structured ``key=value`` records on the standard ``logging`` module,
-silent by default (a library-style ``NullHandler``) and switched on by
-``--verbose``. One record per operation carries the operation name, the
-repository scope, the outcome and the elapsed time; subprocess and download
-boundaries add debug records.
+with bounded fields only (stable names and categories, never paths or
+free-form messages), silent by default (a library-style ``NullHandler``) and
+switched on by ``--verbose``. One record per operation carries the operation
+name, the repository directory name, the outcome and the elapsed time;
+subprocess and download boundaries add debug records.
 """
 
 from __future__ import annotations
@@ -35,13 +36,12 @@ def configure(*, verbose: bool) -> None:
 
 
 def failure(operation: str, error: Exception) -> None:
-    """Log an expected failure with its category (the exception class)."""
-    logger.warning(
-        "operation=%s failure category=%s message=%s",
-        operation,
-        type(error).__name__,
-        error,
-    )
+    """Log an expected failure by category only (the exception class).
+
+    The message is free-form and may carry paths, so it stays on the diagnostic
+    stream and out of the structured record.
+    """
+    logger.warning("operation=%s failure category=%s", operation, type(error).__name__)
 
 
 def observe(
@@ -68,7 +68,7 @@ def observe(
     logger.info(
         "operation=%s repository=%s outcome=%s exit_status=%d elapsed_seconds=%.3f",
         operation,
-        repository,
+        repository.name,
         _OUTCOMES.get(status, "error"),
         status,
         time.monotonic() - started,

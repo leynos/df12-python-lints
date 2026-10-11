@@ -73,7 +73,7 @@ class TestObservability:
         cli.main(["--verbose", "check", "--repository", str(repo), "--binary", "n"])
         messages = [record.getMessage() for record in caplog.records]
         operation = next(m for m in messages if m.startswith("operation=check"))
-        assert f"repository={repo.resolve()}" in operation
+        assert f"repository={repo.name}" in operation
         assert "outcome=blocking" in operation
         assert "elapsed_seconds=" in operation
         assert any(m.startswith("subprocess program=") for m in messages)
@@ -176,6 +176,7 @@ class TestEnvironmentalFailures:
         cli.main(["check", "--repository", str(repo), "--binary", "n"])
         messages = [record.getMessage() for record in caplog.records]
         assert any("failure category=ToolExecutionError" in m for m in messages)
+        assert not any(str(repo) in m for m in messages), "records carry no paths"
         write_fake_nose(repo / "n", Script(stdout=report(family(_A, _B))))
         cli.main(["check", "--repository", str(repo), "--binary", "n"])
         messages = [record.getMessage() for record in caplog.records]
