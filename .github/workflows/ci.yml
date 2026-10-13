@@ -44,7 +44,7 @@ jobs:
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.1 fixed the wrapping
         # and Setext rewrites the estate relies on.
         uses: >-
-          leynos/shared-actions/.github/actions/install-mdtablefix@a5765019912a8ab6882b12db049c7cde635f3a85
+          leynos/shared-actions/.github/actions/install-mdtablefix@aea9c14c24b73042e99f0be8245a4f171b67c31a
         with:
           version: '0.6.1'
 
@@ -88,7 +88,7 @@ jobs:
       # the work and the CodeScene upload for the same commit.
       - name: Test and Measure Coverage
         if: ${{ github.event_name == 'pull_request' }}
-        uses: leynos/shared-actions/.github/actions/generate-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
+        uses: leynos/shared-actions/.github/actions/generate-coverage@aea9c14c24b73042e99f0be8245a4f171b67c31a
         # Pin the coverage venv's interpreter to the one setup-python installs.
         # The shared action creates `.venv-coverage` with a bare `uv venv`,
         # which takes whatever interpreter uv discovers first, and uv 0.12.19
