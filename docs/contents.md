@@ -34,6 +34,14 @@ documentation set.
 - [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 
+## Proposals and delivery
+
+- [Python 3.15 lints RFC](rfcs/0001-python-315-lints.md) proposes baseline-aware
+  import, sentinel, schema, and optional representation policies, including
+  upstream ownership and migration limits.
+- [Delivery roadmap](roadmap.md) translates the proposed Python 3.15 policy
+  into GIST phases, workstreams, and review-sized tasks with success criteria.
+
 ## Engineering practice
 
 - [Complexity antipatterns and refactoring strategies](complexity-antipatterns-and-refactoring-strategies.md)
