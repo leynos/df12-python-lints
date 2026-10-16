@@ -73,7 +73,7 @@ def test_forced_plugin_reload_preserves_checker_instances() -> None:
     linter.load_plugin_modules(["df12_python_lints"])
     before = _plugin_checkers(linter)
 
-    linter.load_plugin_modules(linter._dynamic_plugins, force=True)
+    linter.load_plugin_modules(["df12_python_lints"], force=True)
     after = _plugin_checkers(linter)
 
     assert len(before) == 10, "plugin loading should register ten checkers"
