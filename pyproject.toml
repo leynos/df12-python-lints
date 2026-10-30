@@ -21,7 +21,7 @@ duplication = ["tomlkit>=0.13,<1"]
 # backend to equal it, so Make, workflows and this package cannot drift apart.
 # Skylos parses source with its own Python AST: run the command under an
 # interpreter at least as new as the syntax being scanned.
-skylos = ["tomlkit>=0.13,<1", "skylos==4.33.2"]
+skylos = ["tomlkit>=0.13,<1", "skylos==5.1.3"]
 
 [dependency-groups]
 dev = [
@@ -39,7 +39,7 @@ dev = [
     "pyyaml>=6.0.3",
     # The same release as the `skylos` extra (a test asserts they agree), so the
     # coverage lane, which syncs only the dev group, runs the native tests.
-    "skylos==4.33.2",
+    "skylos==5.1.3",
 ]
 
 [tool.ruff]
