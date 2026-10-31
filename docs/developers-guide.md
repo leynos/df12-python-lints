@@ -12,9 +12,15 @@ checkers, each defined in its own module: `MatchDispatchChecker`,
 `ReexportAssignmentChecker`, `SuppressionCommentChecker`,
 `SnapshotAssertionChecker`, `DataclassSlotsChecker`, `TypeAliasChecker`, and
 `FutureAnnotationsChecker`. Between them, they expose thirteen messages. The
-last two are gated on pylint's `py-version` option: the type-alias check needs
-a 3.12+ baseline (PEP 695) and the future-annotations check a 3.14+ baseline
-(PEP 749 deferred evaluation), so the end-to-end shim tests pass
+`register()` function is idempotent per linter and exact checker class. Pylint
+invokes it again in each worker under `--jobs` above one, reloading dynamic
+plugins with `force=True` on the unpickled linter. Registration therefore skips
+checker classes already present without sharing state across independent
+linters.
+
+The last two are gated on pylint's `py-version` option: the type-alias check
+needs a 3.12+ baseline (PEP 695) and the future-annotations check a 3.14+
+baseline (PEP 749 deferred evaluation), so the end-to-end shim tests pass
 `--py-version=3.14` explicitly — the shim runs under PyPy, whose interpreter
 version would otherwise gate both checks off.
 
