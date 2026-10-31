@@ -341,19 +341,8 @@ actions under `.github/`.
 - `.github/workflows/build-wheels.yml` is a reusable workflow for extension
   builds. It accepts a Python version and builds wheels across Linux, Windows,
   and macOS architectures via `.github/actions/build-wheels`.
-- `.github/workflows/coverage-main.yml` runs on pushes to `main` and on
-  dispatch, and is the only CodeScene caller. A
-  `Check CodeScene token availability` step (id `codescene_token`) runs exactly
-  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`,
-  with no `if:` and no `env`. The upload runs only when that output is `true`
-  and `github.ref` is `refs/heads/main`, and takes the token as its
-  `access-token` input, so no `env` holds it: the upload is a composite action
-  whose nested steps inherit the calling step's `env`.
-  `tests/test_codescene_publisher.py` holds the shape and requires the token to
-  be named exactly at the check's command and the upload's input.
-- `.github/workflows/get-codescene-sha.yml` is manually dispatched. It fetches
-  the CodeScene coverage CLI installer, computes its SHA-256 digest, and writes
-  the result to the `CODESCENE_CLI_SHA256` repository variable.
+- `.github/workflows/coverage-main.yml` is the one CodeScene publisher; see
+  "CodeScene coverage publication" below.
 - `.github/actions/build-wheels` wraps `cibuildwheel` with `uvx` and uploads
   architecture-specific wheel artefacts.
 - `.github/actions/pure-python-wheel` builds a pure Python wheel with
@@ -361,10 +350,9 @@ actions under `.github/`.
 - `.github/dependabot.yml` enables dependency update pull requests for GitHub
   Actions and Python packages. Rust-enabled projects also receive Cargo updates.
 
-The `CS_ACCESS_TOKEN` secret must be configured when CodeScene coverage upload
-is required. The `CODESCENE_CLI_SHA256` variable should be populated using the
-refresh workflow, so CI can verify the downloaded CodeScene installer before
-upload.
+The `CS_ACCESS_TOKEN` secret belongs in the `codescene` environment, whose
+deployment policy admits `main` alone. Without it the publisher skips the
+upload, writes a warning and still succeeds.
 
 ## Shared spelling configuration
 
@@ -454,3 +442,42 @@ honoured by putting that uv's directory on `PATH`, so the executable must be
 named `uv`. A Git-sourced tool that is not cached yet needs uv 0.11.28 or
 newer; with an older uv, running the tool once with `uvx` warms the cache.
 `uv.lock` changes only through a manual `uv lock`; the gates never change it.
+
+## CodeScene coverage publication
+
+Main owns CodeScene (CV-005). Nothing a pull request can start talks to
+CodeScene or holds its credential.
+
+- **Pull requests** (`.github/workflows/ci.yml`) run the tests, then measure
+  coverage and ratchet it with the shared `generate-coverage` action over
+  `./df12_python_lints`. The report is not uploaded anywhere.
+- **Main** (`.github/workflows/coverage-main.yml`) is the one publisher. It
+  runs on each push to `main` and on manual dispatch (which must target `main`:
+  the `codescene` environment, whose deployment policy admits `main` alone,
+  refuses a dispatch from any other branch before the job runs). It generates
+  the same coverage, writes the ratchet baseline that pull requests compare
+  against, and uploads through the shared `upload-codescene-coverage` action.
+  With no `CS_ACCESS_TOKEN` in the environment, the upload step is skipped and
+  a separate step writes a warning, so the run still succeeds and the publisher
+  works before a CodeScene project exists.
+- **Known exception.** Merges made with `GITHUB_TOKEN`, such as Dependabot
+  automerge, fire no push event, so they reach the publisher only through a
+  later push or a manual dispatch. A manual dispatch uploads coverage but does
+  not save the ratchet baseline, which the shared action writes only on a push
+  to `main`; pull requests keep comparing against the older baseline until a
+  later push advances it.
+
+The `generate-coverage` selection in both workflows must match field for field
+(`python-source`, format and interpreter), and `.github/cv005.toml` repeats the
+`python-source`.
+
+### The CV-005 contract check
+
+`make test-workflow-contracts` runs the shared `cv005-contracts` checker
+against this repository's workflows. `make all` includes it, and CI runs it.
+The checker is fetched from the `leynos/shared-actions` commit named by
+`CV005_CONTRACTS_REF` in the `Makefile`, so the first run needs network access.
+Always pin a full 40-character commit: a fix to the contract arrives as a pin
+bump, never as a local copy of the rules. The command exits 0 when every clause
+holds, 1 with one `clause: message` line per violation, and 2 when the tree or
+the configuration cannot be read.
