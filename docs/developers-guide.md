@@ -352,7 +352,11 @@ actions under `.github/`.
 
 The `CS_ACCESS_TOKEN` secret belongs in the `codescene` environment, whose
 deployment policy admits `main` alone. Without it the publisher skips the
-upload, writes a warning and still succeeds.
+upload, writes a warning and still succeeds. If a repository- or
+organisation-level `CS_ACCESS_TOKEN` also exists, move it into the environment
+and delete the broader copy: GitHub makes broader secrets available to
+workflows outside the environment, and the publisher falls back to them when
+the environment has none.
 
 ## Shared spelling configuration
 
