@@ -43,7 +43,7 @@ jobs:
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.1 fixed the wrapping
         # and Setext rewrites the estate relies on.
         uses: >-
-          leynos/shared-actions/.github/actions/install-mdtablefix@a5765019912a8ab6882b12db049c7cde635f3a85
+          leynos/shared-actions/.github/actions/install-mdtablefix@872f59f53717b5bebe8e24b2f4a7496b089a939a
         with:
           version: '0.6.1'
 
@@ -91,7 +91,7 @@ jobs:
         # venv with a bare `uv venv`, which takes whatever uv finds first.
         env:
           UV_PYTHON: '3.13'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
+        uses: leynos/shared-actions/.github/actions/generate-coverage@872f59f53717b5bebe8e24b2f4a7496b089a939a
         with:
           python-source: ./df12_python_lints
           output-path: coverage.xml
