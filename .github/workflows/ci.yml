@@ -5,13 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   lint-test:
     runs-on: ubuntu-latest
-    env:
-      CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-      CODESCENE_CLI_SHA256: ${{ vars.CODESCENE_CLI_SHA256 }}
-      
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
@@ -87,21 +86,22 @@ jobs:
       # coverage-main.yml, so generating it here as well would duplicate
       # the work and the CodeScene upload for the same commit.
       - name: Test and Measure Coverage
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: leynos/shared-actions/.github/actions/generate-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
-        # Pin the coverage venv's interpreter to the one setup-python installs.
-        # The shared action creates `.venv-coverage` with a bare `uv venv`,
-        # which takes whatever interpreter uv discovers first, and uv 0.12.19
-        # began picking 3.14: pull requests then measured on 3.14 against a
-        # baseline main measured on 3.13, and the ratchet failed on no change.
-        # Keep in step with the other coverage lane; a contract holds the two.
+        if: github.event_name == 'pull_request'
+        # Pin one interpreter in both lanes: generate-coverage builds its own
+        # venv with a bare `uv venv`, which takes whatever uv finds first.
         env:
           UV_PYTHON: '3.13'
+        uses: leynos/shared-actions/.github/actions/generate-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
+          python-source: ./df12_python_lints
           output-path: coverage.xml
           format: cobertura
           artefact-name-suffix: df12-python-lints
           with-ratchet: 'true'
+          publish-artefact: 'false'
+
+      - name: Check the CV-005 contracts
+        run: make test-workflow-contracts
           
       # The changed-line `cs-coverage check` gate is deliberately not wired
       # in yet: CodeScene rejects `cs-coverage check` for any project whose
