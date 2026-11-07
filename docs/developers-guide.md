@@ -292,9 +292,12 @@ before being considered complete.
 requires 100% docstring coverage across `$(INTERROGATE_TARGETS)`, which is
 `$(PYTHON_TARGETS)` and `scripts`. `scripts/uv_gate.py` is the vendored
 shared-actions helper; it is not edited here, and it ships with complete
-docstrings. The target prints every definition and also fails on any `MISSED`
-row, because interrogate rounds its percentage to one decimal and so passes a
-lone gap; `tests/test_interrogate_gate.py` asserts the wiring.
+docstrings. The target prints every definition it scans and also fails on any
+`MISSED` row, because interrogate rounds its percentage to one decimal and so
+can pass a lone gap in a sufficiently large codebase. Interrogate 1.7.0 skips
+any path under a target whose name begins with `.tox`, `.venv`, `venv`, `.git`
+or `.hg`; `tests/test_interrogate_gate.py` fails if a tracked Python file sits
+under such a name inside a target, and asserts the rest of the wiring.
 
 Run `make audit` as the dependency vulnerability gate. It runs `pip-audit` for
 Python dependencies, and Rust-enabled projects also run `cargo audit` from the
@@ -319,8 +322,8 @@ actions under `.github/`.
 
 - `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests. It
   sets up Python 3.13, installs `uv`, validates the generated `Makefile` with
-  `mbake`, runs `make build`, `make check-fmt`, `make lint` (Ruff +
-  `interrogate --fail-under 100 $(PYTHON_TARGETS)` + Pylint), `make typecheck`,
+  `mbake`, runs `make build`, `make check-fmt`, `make lint` (the `interrogate`
+  target over `$(INTERROGATE_TARGETS)` + Ruff + Pylint), `make typecheck`,
   `make spelling`, and `make audit` except for Dependabot pull requests via
   `if: github.actor != 'dependabot[bot]'`, then delegates coverage generation
   to the shared coverage action. When the Rust extension is enabled, it also
