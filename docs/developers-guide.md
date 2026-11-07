@@ -288,8 +288,13 @@ spelling is `make all`. Narrower Make targets may be invoked when investigating
 a specific failure, and changes should be reconciled with the aggregate gate
 before being considered complete.
 
-`make lint` runs Ruff, `interrogate --fail-under 100 $(PYTHON_TARGETS)` for
-100% docstring coverage across `$(PYTHON_TARGETS)`, and Pylint.
+`make lint` runs `make interrogate`, Ruff and Pylint. The `interrogate` target
+requires 100% docstring coverage across `$(INTERROGATE_TARGETS)`, which is
+`$(PYTHON_TARGETS)` and `scripts`. `scripts/uv_gate.py` is the vendored
+shared-actions helper; it is not edited here, and it ships with complete
+docstrings. The target prints every definition and also fails on any `MISSED`
+row, because interrogate rounds its percentage to one decimal and so passes a
+lone gap; `tests/test_interrogate_gate.py` asserts the wiring.
 
 Run `make audit` as the dependency vulnerability gate. It runs `pip-audit` for
 Python dependencies, and Rust-enabled projects also run `cargo audit` from the

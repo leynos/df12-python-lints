@@ -45,6 +45,13 @@ WITH_ACT ?= 0
 ACT_TEST_ENV = $(if $(filter 1 true yes on,$(WITH_ACT)),RUN_ACT_VALIDATION=1,)
 PYTEST_XDIST_WORKERS ?= auto
 PYTHON_TARGETS ?= df12_python_lints tests
+# `scripts/uv_gate.py` is the shared-actions helper, vendored byte for byte, so it
+# is not edited here; it ships with complete docstrings, so the gate covers it.
+INTERROGATE_TARGETS ?= $(PYTHON_TARGETS) scripts
+# Level 2 prints a MISSED row per undocumented definition, which the
+# `interrogate` target fails on: the rounded percentage alone passes a lone gap.
+INTERROGATE_FLAGS ?= -vv --fail-under 100
+INTERROGATE ?= $(UV_GATE) run -- interrogate
 PYLINT_PYTHON ?= pypy@3.12
 PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= $(PYTHON_TARGETS)
@@ -61,7 +68,7 @@ MDTABLEFIX_SELECT = --git --include-untracked
 MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 
 .PHONY: prepare help all audit clean build build-release crosshair lint lint-python fmt check-fmt \
-        markdownlint nixie spelling test typecheck $(TOOLS) $(VENV_TOOLS)
+        markdownlint nixie spelling test typecheck interrogate $(TOOLS) $(VENV_TOOLS)
 
 prepare: ## Install the locked development environment, offline first
 	$(UV_GATE) prepare --group dev
@@ -136,9 +143,20 @@ check-fmt: build $(MDTABLEFIX) ## Verify formatting
 
 lint: lint-python ## Run linters
 
-lint-python: build ## Run Python linters
+# Interrogate rounds its percentage to one decimal, so `--fail-under 100` alone
+# passes a lone gap in a large repository; fail on any MISSED row as well.
+interrogate: build ## Enforce complete Python docstring coverage
+	@report="$$($(INTERROGATE) $(INTERROGATE_FLAGS) $(INTERROGATE_TARGETS))"; \
+	  status=$$?; \
+	  printf '%s\n' "$$report"; \
+	  test "$$status" -eq 0 || exit "$$status"; \
+	  if printf '%s\n' "$$report" | grep -q '| *MISSED *|'; then \
+	    printf '%s\n' 'interrogate: undocumented definitions remain; see the MISSED rows above' >&2; \
+	    exit 1; \
+	  fi
+
+lint-python: build interrogate ## Run Python linters
 	$(UV_GATE) run -- ruff check $(PYTHON_TARGETS)
-	$(UV_GATE) run -- interrogate --fail-under 100 $(PYTHON_TARGETS)
 	$(PYLINT) $(PYLINT_TARGETS)
 
 
