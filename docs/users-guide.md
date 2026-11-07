@@ -654,12 +654,12 @@ these targets in order:
   the shared spelling gate.
 - `audit`: run `pip-audit` and, when Rust is enabled, `cargo audit`.
 
-The `lint-python` target runs Ruff, then Interrogate with
-`interrogate --fail-under 100 $(PYTHON_TARGETS)` to enforce 100% docstring
-coverage for the Python targets, then a pinned Pylint (`PYLINT_VERSION`) on
-uv-managed PyPy 3.12 (`PYLINT_PYTHON`), installed through `uv tool run`.
-`syntax-error` stays enabled, so a module that PyPy cannot parse fails the lint
-rather than being skipped.
+The `lint-python` target first runs the `interrogate` target, which enforces
+100% docstring coverage over `$(INTERROGATE_TARGETS)` (the Python targets and
+`scripts`) and fails on any `MISSED` row, then Ruff, then a pinned Pylint
+(`PYLINT_VERSION`) on uv-managed PyPy 3.12 (`PYLINT_PYTHON`), installed through
+`uv tool run`. `syntax-error` stays enabled, so a module that PyPy cannot parse
+fails the lint rather than being skipped.
 
 The spelling target regenerates the tracked `typos.toml` from the live shared
 dictionary and the `typos.local.toml` overlay on every run, so `typos.toml` is

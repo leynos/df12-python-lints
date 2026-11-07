@@ -81,10 +81,11 @@
   - The generated Makefile wiring for these targets is:
     - `make check-fmt` runs Ruff formatting checks with
       `ruff format --check $(PYTHON_TARGETS)`.
-    - `make lint` runs `make lint-python`; `make lint-python` runs
-      `ruff check $(PYTHON_TARGETS)`, enforces 100% docstring coverage with
-      `interrogate --fail-under 100 $(PYTHON_TARGETS)`, and runs the
-      PyPy-backed Pylint runner against `$(PYLINT_TARGETS)`.
+    - `make lint` runs `make lint-python`; `make lint-python` first runs
+      `make interrogate` (100% docstring coverage over
+      `$(INTERROGATE_TARGETS)`, failing on any `MISSED` row), then
+      `ruff check $(PYTHON_TARGETS)`, and runs the PyPy-backed Pylint runner
+      against `$(PYLINT_TARGETS)`.
     - `make typecheck` runs `ty check $(PYTHON_TARGETS)`.
     - `make test` runs `pytest -v -n $(PYTEST_XDIST_WORKERS)` and honours
       `WITH_ACT=1` through `RUN_ACT_VALIDATION=1`.
