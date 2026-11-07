@@ -297,8 +297,8 @@ docstrings. The target prints every definition it scans and also fails on any
 can pass a lone gap in a sufficiently large codebase. Interrogate 1.7.0 skips a
 path whose first component below a target begins with `.tox`, `.venv`, `venv`,
 `.git` or `.hg`; `tests/test_interrogate_gate.py` fails if a tracked Python
-file sits at such a name directly under a target, and asserts the rest of the
-wiring.
+file sits at such a name, or in a directory of that name, directly under a
+target, and asserts the rest of the wiring.
 
 Run `make audit` as the dependency vulnerability gate. It runs `pip-audit` for
 Python dependencies, and Rust-enabled projects also run `cargo audit` from the
