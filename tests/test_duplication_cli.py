@@ -188,19 +188,26 @@ class TestCheck:
 class TestAllow:
     """Authoring through the command line."""
 
-    def _repo(self, tmp_path: pathlib.Path) -> pathlib.Path:
-        """Create a disposable repository."""
-        return make_repository(tmp_path / "repo")
+    def _repo(
+        self, tmp_path: pathlib.Path, *locations: dict[str, object]
+    ) -> pathlib.Path:
+        """Create a disposable repository whose detector reports one family."""
+        repo = make_repository(tmp_path / "repo")
+        found = report(family(*locations)) if locations else report()
+        write_fake_nose(repo / "n", Script(stdout=found))
+        return repo
 
     def test_repeated_member_records_one_whole_family_entry(
         self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """One or many members work without Make-variable splitting."""
-        repo = self._repo(tmp_path)
+        repo = self._repo(tmp_path, _A, _B, _C)
         code = cli.main([
             "allow",
             "--repository",
             str(repo),
+            "--binary",
+            "n",
             "--member",
             "src/a.py::parse",
             "--member",
@@ -222,11 +229,13 @@ class TestAllow:
 
     def test_first_and_second_aliases_still_work(self, tmp_path: pathlib.Path) -> None:
         """The legacy --first/--second spelling maps onto members."""
-        repo = self._repo(tmp_path)
+        repo = self._repo(tmp_path, location("src/a.py"), location("src/b.py"))
         code = cli.main([
             "allow",
             "--repository",
             str(repo),
+            "--binary",
+            "n",
             "--first",
             "src/a.py",
             "--second",
@@ -245,13 +254,15 @@ class TestAllow:
         self, tmp_path: pathlib.Path
     ) -> None:
         """No shell is involved, so nothing is split or evaluated."""
-        repo = self._repo(tmp_path)
+        repo = self._repo(tmp_path, location("src/my file.py", 1, 20, "f g"))
         reason = "$(echo hi) `id` 'q' \"d\" ünï  trailing "
         assert (
             cli.main([
                 "allow",
                 "--repository",
                 str(repo),
+                "--binary",
+                "n",
                 "--member",
                 "src/my file.py::f g",
                 "--reason",

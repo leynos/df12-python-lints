@@ -153,6 +153,32 @@ def _member_text(member: object, context: str) -> str:
     return member
 
 
+def covers_a_reported_family(
+    findings: cabc.Sequence[Finding], keys: cabc.Sequence[str]
+) -> bool:
+    """Report whether ``keys`` cover every location of some reported family.
+
+    Coverage is the same all-or-nothing rule the blocking gate applies, so an
+    exception that covers only part of a family is not recorded: it would read
+    as success while changing nothing.
+
+    Examples
+    --------
+    >>> from df12_python_lints.duplication.schema import Finding, Location
+    >>> found = Finding(
+    ...     witness="copy-paste",
+    ...     value=1.0,
+    ...     locations=(Location(file="a.py", start=1, end=2, name=None),),
+    ... )
+    >>> covers_a_reported_family([found], ["a.py"])
+    True
+    >>> covers_a_reported_family([], ["a.py"])
+    False
+    """
+    candidate = AllowEntry(keys=tuple(keys), reason="validating")
+    return any(candidate.matches(finding) for finding in findings)
+
+
 def partition_findings(
     findings: cabc.Sequence[Finding], allowlist: cabc.Sequence[AllowEntry]
 ) -> tuple[list[Finding], list[Finding], list[AllowEntry]]:
