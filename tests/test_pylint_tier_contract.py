@@ -212,7 +212,8 @@ def test_warm_up_fetches_the_pinned_release_online() -> None:
     shutil.which("uv") is None or shutil.which("make") is None,
     reason="the end-to-end check needs make and uv",
 )
-@pytest.mark.timeout(620)
+# Budget: the 60 s cache query, the 600 s warm-up and two 600 s probes, plus slack.
+@pytest.mark.timeout(1900)
 def test_configured_pylint_fails_on_an_unparsable_module(tmp_path: Path) -> None:
     """The configured tier must fail on a parse error and pass a clean module.
 
