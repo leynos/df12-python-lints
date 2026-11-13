@@ -170,6 +170,22 @@ def _require_covered(
     ------
     ToolConfigError
         If no reported family has every location matched by ``keys``.
+
+    Examples
+    --------
+    >>> from df12_python_lints.duplication.schema import Finding, Location
+    >>> found = Finding(
+    ...     witness="exact",
+    ...     value=1.0,
+    ...     locations=(Location(file="a.py", start=1, end=2, name=None),),
+    ... )
+    >>> _require_covered([found], ["a.py"])
+    >>> _require_covered([found], ["b.py"])
+    Traceback (most recent call last):
+        ...
+    df12_python_lints._errors.ToolConfigError: b.py covers no reported family; \
+record an exception only for duplication the detector currently reports, and \
+check the key's spelling and its file glob against `df12-duplication check`
     """
     if not covers_a_reported_family(findings, keys):
         msg = (

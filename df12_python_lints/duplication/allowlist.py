@@ -74,6 +74,15 @@ def validate_allow_request(members: cabc.Sequence[str], reason: str) -> tuple[st
     ------
     ToolConfigError
         If the reason is blank, a key is malformed or no key was given.
+
+    Examples
+    --------
+    >>> validate_allow_request(["a.py", "a.py", "b.py::run"], "kept apart")
+    ('a.py', 'b.py::run')
+    >>> validate_allow_request([], "kept apart")
+    Traceback (most recent call last):
+        ...
+    df12_python_lints._errors.ToolConfigError: at least one --member is required
     """
     _validate.require_reason(reason, context="--reason")
     keys = tuple(
