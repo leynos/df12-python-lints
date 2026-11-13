@@ -12,7 +12,14 @@ from __future__ import annotations
 import typing as typ
 
 import pytest
-from duplication_support import Script, make_repository, report, write_fake_nose
+from duplication_support import (
+    Script,
+    family,
+    location,
+    make_repository,
+    report,
+    write_fake_nose,
+)
 from wheel_support import PYTHONS, UV, install_environment, run
 
 pytestmark = [
@@ -45,14 +52,26 @@ class TestInstalledWheel:
             [command, "check", "--repository", str(repo), "--binary", "n"], cwd=outside
         )
         assert checked.returncode == 0, checked.stdout + checked.stderr
+        write_fake_nose(
+            repo / "m",
+            Script(
+                stdout=report(
+                    family(location("src/a.py"), location("src/b.py")),
+                )
+            ),
+        )
         allowed = run(
             [
                 command,
                 "allow",
                 "--repository",
                 str(repo),
+                "--binary",
+                "m",
                 "--member",
                 "src/a.py",
+                "--member",
+                "src/b.py",
                 "--reason",
                 "why",
             ],

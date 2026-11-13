@@ -17,10 +17,10 @@ import typing as typ
 from df12_python_lints._errors import ToolConfigError, ToolExecutionError, describe
 from df12_python_lints._log import failure
 
-from .allowlist import load_allowlist, record_allow_entry
+from .allowlist import load_allowlist, record_allow_entry, validate_allow_request
 from .detector import NeutralFiles, resolve_binary, run_detector, write_neutral_files
 from .install import InstallBoundary, install_detector
-from .policy import partition_findings
+from .policy import covers_a_reported_family, partition_findings
 from .settings import load_settings
 
 if typ.TYPE_CHECKING:
@@ -161,6 +161,25 @@ def _print_outcome(
     return EXIT_BLOCKING
 
 
+def _require_covered(
+    findings: cabc.Sequence[Finding], keys: cabc.Sequence[str]
+) -> None:
+    """Refuse an exception that does not cover a whole reported family.
+
+    Raises
+    ------
+    ToolConfigError
+        If no reported family has every location matched by ``keys``.
+    """
+    if not covers_a_reported_family(findings, keys):
+        msg = (
+            f"{' ~ '.join(keys)} covers no reported family; record an exception "
+            "only for duplication the detector currently reports, and check the "
+            "key's spelling and its file glob against `df12-duplication check`"
+        )
+        raise ToolConfigError(msg)
+
+
 def run_allow(
     context: RunContext,
     *,
@@ -170,14 +189,24 @@ def run_allow(
 ) -> int:
     """Record one exception in ``[[tool.duplication_gate.allow]]``.
 
+    The detector runs first, and the exception is recorded only when the keys
+    cover every location of a family it currently reports: a misspelled key
+    would otherwise be recorded as an exception that silences nothing.
+
     Returns
     -------
     int
-        ``0`` once recorded, ``2`` if the request or manifest is invalid;
-        an invalid request never modifies the manifest.
+        ``0`` once recorded, ``2`` if the request or manifest is invalid, the
+        detector cannot run, or the keys cover no reported family; a refused
+        request never modifies the manifest.
     """
     try:
-        outcome = record_allow_entry(context.pyproject, members=members, reason=reason)
+        keys = validate_allow_request(members, reason)
+        settings = load_settings(context.pyproject)
+        with _neutral_files() as neutral:
+            report = run_detector(settings, context, neutral)
+        _require_covered(report.findings, keys)
+        outcome = record_allow_entry(context.pyproject, members=keys, reason=reason)
     except ToolConfigError as error:
         failure("allow", error)
         print(describe(error), file=streams.err)

@@ -378,7 +378,7 @@ df12-duplication install --repository .
 `pyproject.toml`. `--timeout <seconds>` (default 120) bounds each detector
 invocation, including the version check that `check` runs and the one `install`
 uses to prove the binary; a timeout is a failed analysis and exits `2`. `allow`
-runs no detector, so it ignores the option. The command never derives the
+runs the detector too, so it honours the option. The command never derives the
 target from where it is installed, never changes the process working directory,
 and ignores `PYTHONPATH`. Relative paths (the roots, and a relative `--binary`)
 resolve against the selected repository. `--version` prints the package
@@ -434,9 +434,12 @@ Keys carry no line numbers, so moving code does not invalidate an entry.
 
 `allow` accepts one or many `--member` values (the legacy `--first` and repeated
 `--second` options still work), rejects a blank reason or malformed key before
-touching the file, preserves comments, unrelated tables and file permissions,
-and is idempotent: repeating a member set updates its reason instead of adding
-a duplicate. Editing is serialized with an advisory lock, so concurrent `allow`
+touching the file, runs the detector and refuses with exit `2` and
+`covers no reported family` unless the keys cover every location of a family it
+currently reports (so a misspelled key or a partial member set records
+nothing), preserves comments, unrelated tables and file permissions, and is
+idempotent: repeating a member set updates its reason instead of adding a
+duplicate. Editing is serialized with an advisory lock, so concurrent `allow`
 runs (and `df12-skylos allow` runs) on one manifest do not lose each other's
 changes. The lock coordinates participating commands only, not arbitrary
 editors, and needs POSIX `flock`: Linux and macOS. Native Windows is not

@@ -62,6 +62,29 @@ def _entry(raw: object, *, index: int) -> AllowEntry:
     return parse_entry(table, context=context)
 
 
+def validate_allow_request(members: cabc.Sequence[str], reason: str) -> tuple[str, ...]:
+    """Validate an ``allow`` request without touching the manifest.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The de-duplicated keys, in the order supplied.
+
+    Raises
+    ------
+    ToolConfigError
+        If the reason is blank, a key is malformed or no key was given.
+    """
+    _validate.require_reason(reason, context="--reason")
+    keys = tuple(
+        dict.fromkeys(validate_key(key, context="--member") for key in members)
+    )
+    if not keys:
+        msg = "at least one --member is required"
+        raise ToolConfigError(msg)
+    return keys
+
+
 def record_allow_entry(
     pyproject: pathlib.Path, *, members: cabc.Sequence[str], reason: str
 ) -> str:
@@ -91,13 +114,7 @@ def record_allow_entry(
         If the reason or a key is invalid, or the manifest is malformed.
         The manifest is left untouched.
     """
-    _validate.require_reason(reason, context="--reason")
-    keys = tuple(
-        dict.fromkeys(validate_key(key, context="--member") for key in members)
-    )
-    if not keys:
-        msg = "at least one --member is required"
-        raise ToolConfigError(msg)
+    keys = validate_allow_request(members, reason)
     outcome: list[str] = []
 
     def edit(document: tomlkit.TOMLDocument) -> bool:
