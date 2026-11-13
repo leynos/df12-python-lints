@@ -153,8 +153,21 @@ def _warm_pylint() -> subprocess.CompletedProcess[str]:
         The finished Make process, with output captured.
     """
     make = shutil.which("make")
+    uv = shutil.which("uv")
     assert make is not None, "make must be on PATH"
+    assert uv is not None, "uv must be on PATH"
     environment = {k: v for k, v in os.environ.items() if k not in _GATE_STRIPPED}
+    # The gate asks uv for its cache with no configuration and exports the
+    # answer, so a user-level `cache-dir` cannot send the warm-up elsewhere.
+    cache = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argument list, no shell.
+        [uv, "--no-config", "cache", "dir"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+        env=environment,
+    )
+    environment["UV_CACHE_DIR"] = cache.stdout.strip()
     return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argument list, no shell.
         [
             make,
@@ -186,6 +199,10 @@ def test_warm_up_fetches_the_pinned_release_online() -> None:
         "the warm-up must fetch the release the tier pins"
     )
     gate = (_REPO_ROOT / "scripts" / "uv_gate.py").read_text(encoding="utf-8")
+    assert '[uv, "--no-config", "cache", "dir"]' in gate, (
+        "the gate must still ask uv for its cache with no configuration, as the "
+        "warm-up does"
+    )
     assert all(f'"{name}"' in gate for name in _GATE_STRIPPED), (
         "the warm-up must strip variables the gate itself strips"
     )
