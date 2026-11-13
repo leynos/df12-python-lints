@@ -11,6 +11,7 @@ disabled `syntax-error` let unparsable modules go unlinted.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import shutil
@@ -127,11 +128,92 @@ def _run_configured_pylint(target: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+#: Variables the uv gate strips, so the warm-up reaches the same global cache.
+_GATE_STRIPPED = ("UV_CACHE_DIR", "UV_TOOL_DIR", "UV_OFFLINE", "UV_NO_CACHE")
+
+_WARM_RECIPE: str = (
+    "jm5-pylint-warm: ; uv tool run --managed-python --python $(PYLINT_PYTHON) "
+    "--from 'pylint==$(PYLINT_VERSION)' -- pylint --version"
+)
+
+
+def _warm_pylint() -> subprocess.CompletedProcess[str]:
+    """Fetch the Makefile's pinned Pylint online into the gate's global cache.
+
+    The gate runs offline and goes online only for the cache-miss wordings it
+    recognises. A runner whose cache holds the registry metadata but not the
+    wheel makes uv print a wording the gate does not recognise, so the probe
+    would fail for a cold cache rather than for the property it tests. The
+    pin and interpreter come from the Makefile, so the warm-up cannot drift
+    from the command the probe runs.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        The finished Make process, with output captured.
+    """
+    make = shutil.which("make")
+    uv = shutil.which("uv")
+    assert make is not None, "make must be on PATH"
+    assert uv is not None, "uv must be on PATH"
+    environment = {k: v for k, v in os.environ.items() if k not in _GATE_STRIPPED}
+    # The gate asks uv for its cache with no configuration and exports the
+    # answer, so a user-level `cache-dir` cannot send the warm-up elsewhere.
+    cache = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argument list, no shell.
+        [uv, "--no-config", "cache", "dir"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,
+        env=environment,
+    )
+    environment["UV_CACHE_DIR"] = cache.stdout.strip()
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argument list, no shell.
+        [
+            make,
+            "--no-print-directory",
+            "-s",
+            "-C",
+            str(_REPO_ROOT),
+            "--eval",
+            _WARM_RECIPE,
+            "jm5-pylint-warm",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=600,
+        env=environment,
+    )
+
+
+def test_warm_up_fetches_the_pinned_release_online() -> None:
+    """The warm-up must name the pinned release and never run offline."""
+    assert "--offline" not in _WARM_RECIPE, (
+        "the warm-up exists to fetch what the offline gate cannot find"
+    )
+    assert "--python $(PYLINT_PYTHON)" in _WARM_RECIPE, (
+        "the warm-up must use the interpreter the tier pins"
+    )
+    assert "pylint==$(PYLINT_VERSION)" in _WARM_RECIPE, (
+        "the warm-up must fetch the release the tier pins"
+    )
+    gate = (_REPO_ROOT / "scripts" / "uv_gate.py").read_text(encoding="utf-8")
+    assert '[uv, "--no-config", "cache", "dir"]' in gate, (
+        "the gate must still ask uv for its cache with no configuration, as the "
+        "warm-up does"
+    )
+    assert all(f'"{name}"' in gate for name in _GATE_STRIPPED), (
+        "the warm-up must strip variables the gate itself strips"
+    )
+
+
 @pytest.mark.skipif(
     shutil.which("uv") is None or shutil.which("make") is None,
     reason="the end-to-end check needs make and uv",
 )
-@pytest.mark.timeout(620)
+# Budget: the 60 s cache query, the 600 s warm-up and two 600 s probes, plus slack.
+@pytest.mark.timeout(1900)
 def test_configured_pylint_fails_on_an_unparsable_module(tmp_path: Path) -> None:
     """The configured tier must fail on a parse error and pass a clean module.
 
@@ -144,6 +226,10 @@ def test_configured_pylint_fails_on_an_unparsable_module(tmp_path: Path) -> None
     clean = tmp_path / "clean_module.py"
     clean.write_text('"""A clean module."""\n\nVALUE = 1\n', encoding="utf-8")
 
+    warmed = _warm_pylint()
+    assert warmed.returncode == 0, (
+        f"the pinned Pylint must be fetchable: {warmed.stdout}{warmed.stderr}"
+    )
     failed = _run_configured_pylint(broken)
     passed = _run_configured_pylint(clean)
 
