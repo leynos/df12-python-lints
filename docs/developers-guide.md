@@ -58,8 +58,8 @@ The runtime dependency is bounded to `pylint>=3.3,<5`. Dataclass base inference
 uses Astroid's private `Instance._proxied` bridge because no public API exposes
 the underlying `ClassDef`; a new Pylint major version therefore requires the
 focused inference and inherited-layout tests to be revalidated before widening
-the range. [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records
-the conservative analysis, caching, and compatibility decision.
+the range. [ADR 001](adrs/adr-0001-conservative-dataclass-layout-analysis.md)
+records the conservative analysis, caching, and compatibility decision.
 
 The dataclass-slots decorator pass preserves source order. Decorators below
 `dataclass` run first and suppress the check unless they are a proven
@@ -191,7 +191,7 @@ lock protocol: an advisory `flock` on a stable `.<name>.df12.lock` sidecar of
 the resolved manifest, held across read, validation, edit and atomic
 replacement), `_atomic.py`, `_validate.py`, `_errors.py`, `_log.py` (structured
 boundary logging, silent unless `--verbose`) and `_pathglob.py`. The design
-decisions are recorded in [ADR 002](adr-002-df12-duplication-command.md).
+decisions are recorded in [ADR 002](adrs/adr-0002-df12-duplication-command.md).
 
 `_pathglob.py` supplies `PurePosixPath.full_match` on Python 3.12 by porting
 CPython's `glob.translate` and `fnmatch` translation. On 3.13 and later it
@@ -236,7 +236,8 @@ authority; the package validates, invokes and adapts.
 | `allow.py`    | documented-whitelist authoring through the shared manifest transaction      |
 | `commands.py` | `check`, `validate-config` and `allow`, and the exit statuses               |
 
-The design decisions are recorded in [ADR 003](adr-003-df12-skylos-command.md).
+The design decisions are recorded in
+[ADR 003](adrs/adr-0003-df12-skylos-command.md).
 
 It reuses `_manifest.py` (the one lock protocol, shared with
 `df12-duplication`), `_runtime.py` (the subprocess boundary and repository

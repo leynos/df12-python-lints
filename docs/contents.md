@@ -23,15 +23,16 @@ documentation set.
 - [Duplication gate migration guide](duplication-gate-migration.md) explains
   how to move a vendored nose gate onto the installed `df12-duplication`
   command, with the command mapping and a deletion checklist.
-- [ADR 002](adr-002-df12-duplication-command.md) records the boundaries, shared
-  primitives, locking, installer verification and Python 3.12 decisions of the
-  `df12-duplication` command.
-- [ADR 003](adr-003-df12-skylos-command.md) records the adapter, isolation,
-  configuration split, pin and authoring decisions of the `df12-skylos` command.
+- [ADR 002](adrs/adr-0002-df12-duplication-command.md) records the boundaries,
+  shared primitives, locking, installer verification and Python 3.12 decisions
+  of the `df12-duplication` command.
+- [ADR 003](adrs/adr-0003-df12-skylos-command.md) records the adapter,
+  isolation, configuration split, pin and authoring decisions of the
+  `df12-skylos` command.
 - [Skylos gate migration guide](skylos-gate-migration.md) explains how to move
   a Skylos Makefile target and its copied contract suites onto the installed
   `df12-skylos` command, with a deletion checklist.
-- [ADR 001](adr-001-conservative-dataclass-layout-analysis.md) records the
+- [ADR 001](adrs/adr-0001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 
 ## Engineering practice
