@@ -88,13 +88,29 @@ class TestAllowCoverage:
         ), "expected: the entry to be written"
 
     def test_unusable_detector_stops_allow_before_writing(
-        self, tmp_path: pathlib.Path
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """A detector that cannot run is an error and records nothing."""
+        """A detector that cannot run is an error and records nothing.
+
+        The request names the whole family, so only the detector failure can
+        explain the refusal.
+        """
         repo = _repo(tmp_path)
         before = (repo / "pyproject.toml").read_bytes()
-        code = _allow(repo, "missing-nose", "src/a.py::parse")
+        code = _allow(
+            repo,
+            "missing-nose",
+            "src/a.py::parse",
+            "src/b.py::parse",
+            "src/c.py::parse",
+        )
         assert code == 2, "expected: an unusable detector to exit 2"
+        err = capsys.readouterr().err
+        assert "cannot run" in err, "expected: the detector failure to be reported"
+        assert "missing-nose" in err, "expected: the failing binary to be named"
+        assert "covers no reported family" not in err, (
+            "expected: the failure not to be reported as a coverage refusal"
+        )
         assert (repo / "pyproject.toml").read_bytes() == before, (
             "expected: the manifest to stay untouched"
         )
