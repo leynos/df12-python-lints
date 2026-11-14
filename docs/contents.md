@@ -35,6 +35,12 @@ documentation set.
 - [ADR 001](adrs/adr-0001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 
+## Requests for comments
+
+- [RFC 0002](rfcs/rfc-0002-conservative-loop-invariant-expression-lint.md)
+  proposes an opt-in Pylint rule for safely reusable loop-invariant expressions,
+  with explicit effects, control-flow, identity, and cost semantics.
+
 ## Engineering practice
 
 - [Complexity antipatterns and refactoring strategies](complexity-antipatterns-and-refactoring-strategies.md)
