@@ -138,8 +138,8 @@ class TestReproducibleScan:
             context_for(repo, runner, environment=environment),
             Streams(io.StringIO(), io.StringIO()),
         )
-        assert [env.get("PYTHONHASHSEED") for env in runner.environments] == ["0"], (
-            "the scan must run under PYTHONHASHSEED=0"
+        assert [env.get("PYTHONHASHSEED") for env in runner.environments] == ["2"], (
+            "the scan must run under PYTHONHASHSEED=2"
         )
 
 

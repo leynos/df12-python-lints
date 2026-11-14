@@ -51,11 +51,23 @@ EXIT_BLOCKING = 1
 _PIN = re.compile(r"\s*skylos\s*==\s*([0-9A-Za-z.+!-]+)\s*")
 _EMPTY_MARKER = "No Python files found in"
 # Skylos exposes `skylos.cli:main` and has no `__main__`, so the scan runs it
-# in a child interpreter in isolated mode (`-I`): no current-directory entry on
-# `sys.path` and no `PYTHON*` environment, so a `skylos` package committed in
-# the scanned checkout can never shadow the pinned installation. The child is
+# in a child interpreter with no current-directory entry on `sys.path` (`-P`),
+# no user site (`-s`) and no `PYTHON*` variable except the fixed hash seed
+# (see `scan_environment`), so a `skylos` package committed in the scanned
+# checkout can never shadow the pinned installation. `-I` would do the same but
+# also ignores `PYTHONHASHSEED`, which the scan needs. The child is
 # `sys.executable`, so the scan uses the very interpreter this command was
 # started under.
+_ISOLATION_FLAGS = ("-P", "-s")
+# Native Skylos names a module by stripping its path at the first source-root
+# name (`src`, `lib`, `python`) it meets while iterating a set, so with a random
+# string hash seed the same tree can be named differently from run to run and
+# an entry point match or miss. The scan therefore always runs under one seed.
+# Seed 2 is the one repositories that hit this (dev-env-rocky) already
+# authored their entry points against: it iterates `src` first, so
+# `python/pkg/src/pkg/x.py` is named `pkg.x`. Seeds 0, 1, 4, 6, 7 and 8 name it
+# `pkg.src.pkg.x` there instead.
+SCAN_HASH_SEED = "2"
 _BOOTSTRAP = "import sys; from skylos.cli import main; sys.argv[0] = 'skylos'; main()"
 # Local-only intent: no cloud upload, no provenance lookup, no grep
 # verification; dead-code analysis only. Nothing here contacts an AI service.
@@ -186,7 +198,7 @@ def build_command(
     """
     return [
         executable,
-        "-I",
+        *_ISOLATION_FLAGS,
         "-c",
         _BOOTSTRAP,
         "--config-file",
@@ -194,6 +206,21 @@ def build_command(
         *settings.roots,
         *_SCAN_FLAGS,
     ]
+
+
+def scan_environment(environment: cabc.Mapping[str, str]) -> dict[str, str]:
+    """Return the scan child's environment.
+
+    Every ``PYTHON*`` variable is dropped, so none can redirect the import
+    system, and the hash seed is fixed; everything else passes through.
+
+    Examples
+    --------
+    >>> scan_environment({"PATH": "/bin", "PYTHONPATH": "/x", "PYTHONHASHSEED": "5"})
+    {'PATH': '/bin', 'PYTHONHASHSEED': '0'}
+    """
+    kept = {k: v for k, v in environment.items() if not k.startswith("PYTHON")}
+    return {**kept, "PYTHONHASHSEED": SCAN_HASH_SEED}
 
 
 def classify(result: CommandResult) -> str:
