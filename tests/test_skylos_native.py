@@ -20,6 +20,7 @@ from skylos_support import PIN
 from df12_python_lints._runtime import CommandResult, Streams, run_command
 from df12_python_lints.skylos import backend, commands
 from df12_python_lints.skylos.context import SkylosContext
+from df12_python_lints.skylos.settings import ScanSettings
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -172,9 +173,42 @@ class TestVerdicts:
             "python/pkg/src/pkg/__init__.py": "",
             "python/pkg/src/pkg/mod.py": "def hook():\n    return 1\n",
         }
-        repo = _repo(tmp_path, files, extra, roots='["python/pkg/src"]')
+        repo = _repo(tmp_path, files, extra, roots='["."]')
         code, out, _ = _check(repo, environment={"PYTHONHASHSEED": caller_seed})
         assert code == 0, out
+
+    @pytest.mark.parametrize("native_seed", ["0", "1", "4"])
+    def test_control_unfixed_native_scan_misses_the_entry_point(
+        self, tmp_path: pathlib.Path, native_seed: str
+    ) -> None:
+        """Without the fixed seed the same tree fails under these seeds.
+
+        The scan root has to sit above both ``python`` and ``src`` (here ``.``)
+        for the competing source-root names to appear in a module's relative
+        path. This control starts the native scan directly, under the seed
+        and with the isolation flags the child uses, and shows that seed
+        decides the verdict; it is what the fixed seed removes.
+        """
+        extra = (
+            '[[tool.skylos.dead_code.entrypoints]]\ntype = "function"\n'
+            'full_name = ["pkg.mod.hook"]\n'
+            'reason = "The framework dispatches it."\n'
+        )
+        files = {
+            "python/pkg/src/pkg/__init__.py": "",
+            "python/pkg/src/pkg/mod.py": "def hook():\n    return 1\n",
+        }
+        repo = _repo(tmp_path, files, extra, roots='["."]')
+        settings = ScanSettings((".",), (3, 12))
+        command = backend.build_command(
+            backend.BackendProbe.detect().executable,
+            repo / "pyproject.toml",
+            settings,
+        )
+        result = run_command(
+            command, repo, {**os.environ, "PYTHONHASHSEED": native_seed}, 300
+        )
+        assert result.returncode == 1, result.stdout
 
     def test_runtime_entry_point_is_narrow(self, tmp_path: pathlib.Path) -> None:
         """A callback exemption spares the callback but not an unused neighbour."""
