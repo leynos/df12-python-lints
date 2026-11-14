@@ -44,7 +44,8 @@ def parse_duration(text: str) -> float:
     return float(magnitude) * scale
 
 
-def parse_ratio(text: str) -> float:  # @CodeScene(disable:"Complex Method")
+# @CodeScene(disable:"Complex Method")
+def parse_ratio(text: str) -> float:
     """Parse a ratio such as ``"3:4"`` or ``"80%"`` into a fraction.
 
     Parameters
