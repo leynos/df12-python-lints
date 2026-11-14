@@ -193,7 +193,7 @@ def build_command(
     >>> from df12_python_lints.skylos.settings import ScanSettings
     >>> settings = ScanSettings(("a", "b"), (3, 14))
     >>> command = build_command("py", pathlib.Path("/r/pyproject.toml"), settings)
-    >>> command[3:8]
+    >>> command[5:10]
     ['--config-file', '/r/pyproject.toml', 'a', 'b', '--category']
     """
     return [
@@ -217,7 +217,7 @@ def scan_environment(environment: cabc.Mapping[str, str]) -> dict[str, str]:
     Examples
     --------
     >>> scan_environment({"PATH": "/bin", "PYTHONPATH": "/x", "PYTHONHASHSEED": "5"})
-    {'PATH': '/bin', 'PYTHONHASHSEED': '0'}
+    {'PATH': '/bin', 'PYTHONHASHSEED': '2'}
     """
     kept = {k: v for k, v in environment.items() if not k.startswith("PYTHON")}
     return {**kept, "PYTHONHASHSEED": SCAN_HASH_SEED}

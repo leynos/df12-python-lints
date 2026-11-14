@@ -81,12 +81,14 @@ def _repo(
 
 
 def _check(
-    repo: pathlib.Path, runner: cabc.Callable[..., CommandResult] = run_command
+    repo: pathlib.Path,
+    runner: cabc.Callable[..., CommandResult] = run_command,
+    environment: cabc.Mapping[str, str] | None = None,
 ) -> tuple[int, str, str]:
     """Run ``check`` through the real backend; return status and streams."""
     context = SkylosContext(
         repository=repo.resolve(),
-        environment=dict(os.environ),
+        environment={**os.environ, **(environment or {})},
         probe=backend.BackendProbe.detect(),
         runner=runner,
         timeout_seconds=300,
@@ -148,6 +150,31 @@ class TestVerdicts:
         assert code == 1, "expected: code == 1"
         assert "other_dead" in out, "expected: 'other_dead' in out"
         assert "never_called" not in out, "expected: 'never_called' not in out"
+
+    @pytest.mark.parametrize("caller_seed", ["0", "1", "4", "6", "7", "8", "random"])
+    def test_nested_source_root_entry_point_ignores_the_callers_seed(
+        self, tmp_path: pathlib.Path, caller_seed: str
+    ) -> None:
+        """A path with both ``python`` and ``src`` is named the same every run.
+
+        Native Skylos picks the source-root name by iterating a set, so under
+        the seeds above (measured on dev-env-rocky) the module is named
+        ``pkg.src.pkg.mod`` and the entry point for ``pkg.mod.hook`` misses.
+        The scan fixes its own seed, so the verdict is the same whatever seed
+        the caller holds.
+        """
+        extra = (
+            '[[tool.skylos.dead_code.entrypoints]]\ntype = "function"\n'
+            'full_name = ["pkg.mod.hook"]\n'
+            'reason = "The framework dispatches it."\n'
+        )
+        files = {
+            "python/pkg/src/pkg/__init__.py": "",
+            "python/pkg/src/pkg/mod.py": "def hook():\n    return 1\n",
+        }
+        repo = _repo(tmp_path, files, extra, roots='["python/pkg/src"]')
+        code, out, _ = _check(repo, environment={"PYTHONHASHSEED": caller_seed})
+        assert code == 0, out
 
     def test_runtime_entry_point_is_narrow(self, tmp_path: pathlib.Path) -> None:
         """A callback exemption spares the callback but not an unused neighbour."""

@@ -126,15 +126,19 @@ class TestVerification:
 
 
 def _child_output(
-    source: str, caller_environment: dict[str, str]
+    source: str,
+    caller_environment: dict[str, str],
+    cwd: pathlib.Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run ``source`` in a real child started the way the scan starts it."""
+    """Run ``source`` in a real child started the way the scan starts it.
+
+    The child receives exactly ``scan_environment`` of the caller's environment
+    and nothing else, as the production scan does.
+    """
     return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed interpreter and flags.
         [sys.executable, *backend._ISOLATION_FLAGS, "-c", source],
-        env={
-            **os.environ,
-            **backend.scan_environment({**os.environ, **caller_environment}),
-        },
+        env=backend.scan_environment({**os.environ, **caller_environment}),
+        cwd=cwd,
         capture_output=True,
         text=True,
         check=False,
@@ -172,21 +176,15 @@ class TestScanChild:
             "import decoy_module",
             {"PYTHONPATH": str(tmp_path)},
         )
-        assert child.returncode != 0, "the decoy must not be importable"
+        assert "ModuleNotFoundError" in child.stderr, child.stderr
 
     def test_the_current_directory_is_not_importable(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """``-P`` keeps the working directory off ``sys.path``."""
+        """The working directory stays off ``sys.path`` despite ``PYTHONPATH=.``."""
         (tmp_path / "decoy_cwd.py").write_text("MARK = 1\n", encoding="utf-8")
-        child = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed interpreter and flags.
-            [sys.executable, *backend._ISOLATION_FLAGS, "-c", "import decoy_cwd"],
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert child.returncode != 0, "the checkout directory must not be importable"
+        child = _child_output("import decoy_cwd", {"PYTHONPATH": "."}, cwd=tmp_path)
+        assert "ModuleNotFoundError" in child.stderr, child.stderr
 
 
 class TestCommand:
