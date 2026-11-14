@@ -205,10 +205,13 @@ class TestVerdicts:
             repo / "pyproject.toml",
             settings,
         )
-        result = run_command(
-            command, repo, {**os.environ, "PYTHONHASHSEED": native_seed}, 300
-        )
-        assert result.returncode == 1, result.stdout
+        environment = {
+            **backend.scan_environment(os.environ),
+            "PYTHONHASHSEED": native_seed,
+        }
+        result = run_command(command, repo, environment, 300)
+        assert result.returncode == 1, result.stderr
+        assert "hook" in result.stdout, (result.stdout, result.stderr)
 
     def test_runtime_entry_point_is_narrow(self, tmp_path: pathlib.Path) -> None:
         """A callback exemption spares the callback but not an unused neighbour."""
