@@ -44,7 +44,7 @@ TYPOS_CONFIG_BUILDER = env $(UV) tool run --python 3.14 --from \
 WITH_ACT ?= 0
 ACT_TEST_ENV = $(if $(filter 1 true yes on,$(WITH_ACT)),RUN_ACT_VALIDATION=1,)
 PYTEST_XDIST_WORKERS ?= auto
-PYTHON_TARGETS ?= df12_python_lints tests
+PYTHON_TARGETS ?= df12_python_lints benchmarks tests
 # `scripts/uv_gate.py` is the shared-actions helper, vendored byte for byte, so it
 # is not edited here; it ships with complete docstrings, so the gate covers it.
 INTERROGATE_TARGETS ?= $(PYTHON_TARGETS) scripts

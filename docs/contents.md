@@ -43,6 +43,9 @@ documentation set.
 - [Local validation of GitHub Actions with act and pytest](local-validation-of-github-actions-with-act-and-pytest.md)
   explains how to validate workflow behaviour locally before relying on remote
   Continuous Integration (CI) runs.
+- [Detector benchmarks](developers-guide.md#detector-benchmarks) describes the
+  development-only corpora and retained evidence behind the Skylos and nose
+  choices, moved here from the Episodic repository.
 - [Scripting standards](scripting-standards.md) explains the preferred Python
   scripting stack, command execution patterns, and test expectations for helper
   scripts.
