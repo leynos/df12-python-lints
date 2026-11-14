@@ -190,6 +190,9 @@ max-locals = 10
 [tool.pylint.main]
 recursive = true
 max-module-lines = 400
+# The benchmark corpora contain intentional dead and duplicated code as
+# detector ground truth; their expectations pin source locations.
+ignore-paths = ["^benchmarks/.*/corpus/.*"]
 
 [tool.pylint.design]
 max-args = 4
@@ -325,6 +328,9 @@ per_condition_timeout = 30
 # Tests automatically killed after seconds elapsed
 timeout = 30
 testpaths = ["tests"]
+# The `benchmarks` tree is a development-only package beside `df12_python_lints`
+# (it is not shipped in the wheel); its tests import it from the repository root.
+pythonpath = ["."]
 
 [tool.uv]
 package = true

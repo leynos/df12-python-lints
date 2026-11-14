@@ -305,6 +305,25 @@ Run `make audit` as the dependency vulnerability gate. It runs `pip-audit` for
 Python dependencies, and Rust-enabled projects also run `cargo audit` from the
 `rust_extension` crate directory.
 
+## Detector benchmarks
+
+`benchmarks/dead_code` and `benchmarks/duplication` hold the labelled corpora,
+oracle expectations, result normalizers and retained evidence behind the choice
+of Skylos for `df12-skylos` and nose for `df12-duplication`. They are
+development-only: the wheel ships `df12_python_lints` alone, and no consumer
+repository keeps detector benchmarking code. Each directory's `README.md`
+explains its corpus, the commands that produced the retained results, and why
+the normalizers are specific to the released report schemas they cover.
+
+The tests in `tests/test_dead_code_benchmark*.py` and
+`tests/test_duplication_benchmark*.py` exercise the normalizers and scorers
+against synthetic reports; they never run a detector. `pythonpath = ["."]` in
+`pyproject.toml` lets them import the `benchmarks` package from the repository
+root. The corpora hold intentional dead and duplicated code as ground truth, so
+Pylint ignores `benchmarks/*/corpus` and each corpus module carries its own
+file-level Ruff suppression. Do not edit a corpus file or relabel an
+expectation to make a detector pass: the expectations pin source locations.
+
 ## Automation scripts
 
 The [Scripting standards](scripting-standards.md) document provides guidance
