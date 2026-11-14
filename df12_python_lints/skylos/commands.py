@@ -18,7 +18,7 @@ from df12_python_lints._errors import ToolConfigError, describe
 from df12_python_lints._log import failure
 
 from .allow import record_whitelist_entry
-from .backend import build_command, classify, verify_backend
+from .backend import build_command, classify, scan_environment, verify_backend
 from .config import validate_native
 from .settings import ScanSettings, load_scan_settings
 
@@ -102,7 +102,10 @@ def run_check(context: SkylosContext, streams: Streams) -> int:
         backend = verify_backend(settings, context.probe)
         command = build_command(context.probe.executable, context.pyproject, settings)
         result = context.runner(
-            command, context.repository, context.environment, context.timeout_seconds
+            command,
+            context.repository,
+            scan_environment(context.environment),
+            context.timeout_seconds,
         )
         _warn(warnings, streams)
         # Native findings and logs are the report; pass them through untouched.

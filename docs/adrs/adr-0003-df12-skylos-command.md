@@ -36,10 +36,12 @@ error. A zero exit that logged an empty root is refused.
 
 ### Isolation
 
-The scan runs `skylos.cli:main` in a child of `sys.executable` with `-I`, so
-neither the current directory nor `PYTHON*` variables reach `sys.path`. A
-`skylos` package committed in the scanned checkout cannot shadow the pinned
-installation (tested with a decoy on disk and on `PYTHONPATH`).
+The scan runs `skylos.cli:main` in a child of `sys.executable` with `-P -s` and
+every `PYTHON*` variable removed except a fixed `PYTHONHASHSEED=2` (`-I` would
+ignore the seed, which Skylos's module naming depends on), so neither the
+current directory nor `PYTHON*` variables reach `sys.path`. A `skylos` package
+committed in the scanned checkout cannot shadow the pinned installation (tested
+with a decoy on disk and on `PYTHONPATH`).
 
 ### Configuration
 

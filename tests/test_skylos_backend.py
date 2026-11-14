@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import importlib.metadata
+import os
 import pathlib
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - the tests start real children on purpose.
+import sys
 import typing as typ
 
 import pytest
@@ -122,6 +125,68 @@ class TestVerification:
             backend.verify_backend(_SETTINGS, probe(installed="4.40.0"))
 
 
+def _child_output(
+    source: str,
+    caller_environment: dict[str, str],
+    cwd: pathlib.Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run ``source`` in a real child started the way the scan starts it.
+
+    The child receives exactly ``scan_environment`` of the caller's environment
+    and nothing else, as the production scan does.
+    """
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed interpreter and flags.
+        [sys.executable, *backend._ISOLATION_FLAGS, "-c", source],
+        env=backend.scan_environment({**os.environ, **caller_environment}),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+class TestScanChild:
+    """The real child sees the fixed seed and still cannot import a decoy."""
+
+    @pytest.mark.parametrize("caller_seed", ["0", "2", "random", "4294967295"])
+    def test_effective_hash_seed_is_fixed_whatever_the_caller_sets(
+        self, caller_seed: str
+    ) -> None:
+        """``-I`` ignores ``PYTHONHASHSEED``; the scan flags must not."""
+        expected = subprocess.run(
+            [sys.executable, "-c", "print(hash('src'), hash('python'))"],
+            env={**os.environ, "PYTHONHASHSEED": backend.SCAN_HASH_SEED},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        child = _child_output(
+            "print(hash('src'), hash('python'))", {"PYTHONHASHSEED": caller_seed}
+        )
+        assert child.stdout == expected, (
+            "the scan child must hash strings under the fixed seed"
+        )
+
+    def test_a_decoy_on_pythonpath_cannot_shadow_an_import(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Dropping ``-I`` must not let ``PYTHONPATH`` or the cwd reach imports."""
+        (tmp_path / "decoy_module.py").write_text("MARK = 1\n", encoding="utf-8")
+        child = _child_output(
+            "import decoy_module",
+            {"PYTHONPATH": str(tmp_path)},
+        )
+        assert "ModuleNotFoundError" in child.stderr, child.stderr
+
+    def test_the_current_directory_is_not_importable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The working directory stays off ``sys.path`` despite ``PYTHONPATH=.``."""
+        (tmp_path / "decoy_cwd.py").write_text("MARK = 1\n", encoding="utf-8")
+        child = _child_output("import decoy_cwd", {"PYTHONPATH": "."}, cwd=tmp_path)
+        assert "ModuleNotFoundError" in child.stderr, child.stderr
+
+
 class TestCommand:
     """One argument vector, in the pinned release's order."""
 
@@ -130,17 +195,17 @@ class TestCommand:
         command = backend.build_command(
             "py", pathlib.Path("/r/pyproject.toml"), _SETTINGS
         )
-        assert command[:4] == ["py", "-I", "-c", backend._BOOTSTRAP], (
-            "expected: command[:4] == ['py', '-I', '-c', backend._BOOTSTRAP]"
+        assert command[:5] == ["py", "-P", "-s", "-c", backend._BOOTSTRAP], (
+            "expected: command[:5] == ['py', '-P', '-s', '-c', backend._BOOTSTRAP]"
         )
-        assert command[4:9] == [
+        assert command[5:10] == [
             "--config-file",
             "/r/pyproject.toml",
             "a",
             "b/c.py",
             "--category",
         ], "expected: command[4:9] == [ '--config-file', '/r/pyproject.toml', 'a',..."
-        assert command[8:] == [
+        assert command[9:] == [
             "--category", "dead_code", "--gate", "--format", "concise",
             "--no-upload", "--no-provenance", "--no-grep-verify",
         ], "the scan flags are local-only and ordered after the roots"  # fmt: skip

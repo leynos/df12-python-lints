@@ -117,6 +117,32 @@ class TestCheck:
         assert "warning:" in err.getvalue(), "expected: 'warning:' in err.getvalue()"
 
 
+class TestReproducibleScan:
+    """The verdict must not depend on the caller's string hash seed."""
+
+    @pytest.mark.parametrize("caller_seed", [None, "0", "2", "random"])
+    def test_scan_always_runs_under_one_fixed_hash_seed(
+        self, tmp_path: pathlib.Path, caller_seed: str | None
+    ) -> None:
+        """Native Skylos iterates a set of source-root names to name modules.
+
+        That order follows the hash seed, so some seeds name a module
+        differently and miss an entry point. The scan child therefore gets a
+        fixed seed whatever the caller's environment says, and the same tree
+        gives the same output under every caller seed.
+        """
+        repo = make_repository(tmp_path)
+        runner = FakeRunner()
+        environment = {} if caller_seed is None else {"PYTHONHASHSEED": caller_seed}
+        commands.run_check(
+            context_for(repo, runner, environment=environment),
+            Streams(io.StringIO(), io.StringIO()),
+        )
+        assert [env.get("PYTHONHASHSEED") for env in runner.environments] == ["2"], (
+            "the scan must run under PYTHONHASHSEED=2"
+        )
+
+
 class TestValidateConfig:
     """``validate-config`` invokes nothing and edits nothing."""
 

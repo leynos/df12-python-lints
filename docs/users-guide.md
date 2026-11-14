@@ -514,10 +514,11 @@ df12-skylos allow --repository . \
 
 `--repository` defaults to the invocation directory. The target is never
 derived from where the command is installed, the working directory is never
-changed, and the scan runs in an isolated child interpreter (`-I`) that ignores
-`PYTHONPATH` and cannot import a `skylos` package committed in the scanned
-checkout. `--version` prints the package version, the Skylos pin, the installed
-Skylos and the running interpreter.
+changed, and the scan runs in a child interpreter started with `-P -s` and no
+`PYTHON*` variable but the fixed hash seed, so `PYTHONPATH` and the working
+directory cannot reach imports and a `skylos` package committed in the scanned
+checkout cannot be imported. `--version` prints the package version, the Skylos
+pin, the installed Skylos and the running interpreter.
 
 ### Skylos options
 
@@ -546,6 +547,18 @@ also refused: a root with no Python files only logs
 `No Python files found in <root>`, and the command treats that as a failed
 scan. Skylos with a non-strict gate exits `0` even with findings, so the
 command requires `strict = true`.
+
+### Reproducible results
+
+Native Skylos names a module by stripping its path at the first source-root name
+(`src`, `lib` or `python`) it meets while iterating a set, so under a random
+string hash seed the same tree could be named differently from run to run and
+an entry point would match or miss. `check` therefore always starts the scan
+under `PYTHONHASHSEED=2`, whatever the caller's environment holds, and the
+verdict for a given tree no longer varies between runs. Entry-point rules are
+matched against the names that seed produces. The child cannot use `-I` for
+isolation, because isolated mode ignores `PYTHONHASHSEED`; it uses `-P -s` and
+strips the other `PYTHON*` variables instead.
 
 ### Configuration
 
