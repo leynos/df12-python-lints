@@ -547,6 +547,16 @@ also refused: a root with no Python files only logs
 scan. Skylos with a non-strict gate exits `0` even with findings, so the
 command requires `strict = true`.
 
+### Reproducible results
+
+Native Skylos names a module by stripping its path at the first source-root name
+(`src`, `lib` or `python`) it meets while iterating a set, so under a random
+string hash seed the same tree could be named differently from run to run and
+an entry point would match or miss. `check` therefore always starts the scan
+under `PYTHONHASHSEED=0`, whatever the caller's environment holds, and the
+verdict for a given tree no longer varies between runs. Entry-point rules are
+matched against the names that seed produces.
+
 ### Configuration
 
 Native settings, reasons and exceptions stay in `[tool.skylos]`:

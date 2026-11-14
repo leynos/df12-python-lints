@@ -33,6 +33,11 @@ _LOG = logging.getLogger("df12_python_lints.skylos")
 EXIT_OK = 0
 EXIT_BLOCKING = 1
 EXIT_ERROR = 2
+# Native Skylos names a module by stripping its path at the first source-root
+# name (`src`, `lib`, `python`) it meets while iterating a set, so with a random
+# string hash seed the same tree can be named differently from run to run and
+# an entry point match or miss. The scan therefore always runs under one seed.
+SCAN_HASH_SEED = "0"
 ALLOW_HINT = "df12-skylos allow --symbol '<name>' --reason '<why this stays>'"
 
 
@@ -102,7 +107,10 @@ def run_check(context: SkylosContext, streams: Streams) -> int:
         backend = verify_backend(settings, context.probe)
         command = build_command(context.probe.executable, context.pyproject, settings)
         result = context.runner(
-            command, context.repository, context.environment, context.timeout_seconds
+            command,
+            context.repository,
+            {**context.environment, "PYTHONHASHSEED": SCAN_HASH_SEED},
+            context.timeout_seconds,
         )
         _warn(warnings, streams)
         # Native findings and logs are the report; pass them through untouched.

@@ -71,6 +71,7 @@ class FakeRunner:
     stderr: str = ""
     status: int = 0
     calls: list[tuple[list[str], pathlib.Path]] = dc.field(default_factory=list)
+    environments: list[dict[str, str]] = dc.field(default_factory=list)
 
     def __call__(
         self,
@@ -80,7 +81,8 @@ class FakeRunner:
         timeout: int,
     ) -> CommandResult:
         """Record the call and answer like the scan would."""
-        del environment, timeout
+        del timeout
+        self.environments.append(dict(environment))
         self.calls.append((list(command), cwd))
         return CommandResult(self.status, self.stdout, self.stderr)
 
@@ -90,11 +92,12 @@ def context_for(
     runner: FakeRunner | None = None,
     *,
     backend_probe: BackendProbe | None = None,
+    environment: cabc.Mapping[str, str] | None = None,
 ) -> SkylosContext:
     """Build a context for ``repo`` with a scripted probe and runner."""
     return SkylosContext(
         repository=repo.resolve(),
-        environment={},
+        environment=dict(environment or {}),
         probe=backend_probe or probe(),
         runner=runner or FakeRunner(),
     )
