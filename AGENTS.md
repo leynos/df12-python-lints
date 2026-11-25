@@ -95,7 +95,7 @@
 
   - **Markdown files (`.md` only):**
     - **Linting:** Passes markdown lint checks (`make markdownlint`).
-    - **Spelling:** Passes the en-GB-oxendict gate (`make spelling`).
+    - **Spelling:** Passes the en-GB-oxendict spelling gate (see Spelling below).
     - **Mermaid diagrams:** Passes validation using nixie (`make nixie`).
 - **Committing:**
   - Only changes that meet all quality gates should be committed.
