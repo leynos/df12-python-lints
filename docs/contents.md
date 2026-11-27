@@ -35,6 +35,37 @@ documentation set.
 - [ADR 001](adrs/adr-0001-conservative-dataclass-layout-analysis.md) records the
   conservative, cached layout analysis and supported Pylint range for R9111.
 
+## Proposed refactoring lints
+
+- [Shared refactoring lint contract](refactoring-lint-contract.md) defines
+  evidence, diagnostic ownership, opt-in activation, and verification for the
+  Python 3.12 refactoring proposals.
+- [RFC 0003: Local intent simplifications](rfcs/rfc-0003-local-intent-simplifications.md)
+  proposes direct min/max defaults, sequence indexing, string tests, length
+  reductions, and single-entry dictionary updates.
+- [RFC 0004: Small structural cleanups](rfcs/rfc-0004-small-structural-cleanups.md)
+  proposes compatible try flattening, identical handlers, empty-branch cleanup,
+  and fresh collection initialization.
+- [RFC 0005: Residual idiom refactorings](rfcs/rfc-0005-residual-idiom-refactorings.md)
+  covers generator, search, joining, length-test, and fallback forms beyond
+  existing upstream matchers.
+- [RFC 0006: Branch factoring](rfcs/rfc-0006-branch-factoring.md) proposes
+  common branch statements, stable repeated conditions, and terminal guards.
+- [RFC 0007: Paragraph-guided method extraction](rfcs/rfc-0007-paragraph-guided-method-extraction.md)
+  adapts Whitaker's paragraph model to conservative Python extraction advice.
+- [RFC 0008: Dictionary construction and filtering](rfcs/rfc-0008-dictionary-construction-and-filtering.md)
+  proposes dictionary unions and isolated filtered reconstruction with alias
+  and exception checks.
+- [RFC 0009: Variable placement](rfcs/rfc-0009-variable-placement.md) proposes
+  assignment movement, inlining, value reuse, and repeated-read while
+  conditions, while delegating assignment-before-if to upstream Pylint.
+- [RFC 0010: Numeric and logical transformations](rfcs/rfc-0010-numeric-and-logical-transformations.md)
+  proposes restricted integer and any/all transformations with explicit
+  numerical and exception semantics.
+- [RFC 0011: De Morgan transformations](rfcs/rfc-0011-de-morgan-transformations.md)
+  proposes Boolean-negation normalization that preserves evaluation order and
+  truth-test behaviour.
+
 ## Engineering practice
 
 - [Complexity antipatterns and refactoring strategies](complexity-antipatterns-and-refactoring-strategies.md)
