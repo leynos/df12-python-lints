@@ -58,6 +58,7 @@ from .type_aliases import TypeAliasChecker
 from .wrappers import TrivialWrapperChecker
 
 if typ.TYPE_CHECKING:
+    from pylint.checkers.base_checker import BaseChecker
     from pylint.lint import PyLinter
 
 __all__ = [
@@ -74,23 +75,33 @@ __all__ = [
     "register",
 ]
 
+# Keep the checker registration order stable for predictable Pylint setup.
+_CHECKER_CLASSES: tuple[type[BaseChecker], ...] = (
+    MatchDispatchChecker,
+    AssertMessageChecker,
+    ConstantChainChecker,
+    DataclassSlotsChecker,
+    TrivialWrapperChecker,
+    ReexportAssignmentChecker,
+    SuppressionCommentChecker,
+    SnapshotAssertionChecker,
+    TypeAliasChecker,
+    FutureAnnotationsChecker,
+)
+
 
 def register(linter: PyLinter) -> None:
     """Register the df12 checkers with *linter*.
 
-    Pylint calls this entry point when the plugin loads.
+    Pylint re-invokes this entry point in each worker under ``--jobs`` above
+    one through ``load_plugin_modules(..., force=True)``. Registration is
+    idempotent per linter and per exact checker class.
 
     Examples
     --------
     Invoked automatically by ``pylint --load-plugins=df12_python_lints``.
     """
-    linter.register_checker(MatchDispatchChecker(linter))
-    linter.register_checker(AssertMessageChecker(linter))
-    linter.register_checker(ConstantChainChecker(linter))
-    linter.register_checker(DataclassSlotsChecker(linter))
-    linter.register_checker(TrivialWrapperChecker(linter))
-    linter.register_checker(ReexportAssignmentChecker(linter))
-    linter.register_checker(SuppressionCommentChecker(linter))
-    linter.register_checker(SnapshotAssertionChecker(linter))
-    linter.register_checker(TypeAliasChecker(linter))
-    linter.register_checker(FutureAnnotationsChecker(linter))
+    existing_checker_types = {type(checker) for checker in linter.get_checkers()}
+    for checker_cls in _CHECKER_CLASSES:
+        if checker_cls not in existing_checker_types:
+            linter.register_checker(checker_cls(linter))
