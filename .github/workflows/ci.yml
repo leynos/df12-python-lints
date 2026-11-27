@@ -32,7 +32,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
-      
+
       - name: Install CLI tools
         run: |
           for tool in mbake; do uv tool install ${tool}; done
@@ -54,6 +54,8 @@ jobs:
       - name: Check formatting
         run: make check-fmt
 
+      - name: Install the YAML lint tools
+        uses: leynos/shared-actions/.github/actions/install-yaml-lint@a108423efa7fb83565089449f2647d34286a48a4
       - name: Run ruff
         run: make lint
 
@@ -106,16 +108,16 @@ jobs:
 
       - name: Check the CV-005 contracts
         run: make test-workflow-contracts
-          
-      # The changed-line `cs-coverage check` gate is deliberately not wired
-      # in yet: CodeScene rejects `cs-coverage check` for any project whose
-      # coverage-gates configuration is absent ("Lacks the gates
-      # configuration."), which is a CodeScene-side, per-project setting
-      # rather than a CI defect. Once this repo is onboarded to CodeScene
-      # — set the `codescene_project_id` copier answer — and coverage-main.yml
-      # has uploaded to main at least once, add a `mode: check` step guarded
-      # on `CS_ACCESS_TOKEN != ''` with the project's
-      # `project-url: https://api.codescene.io/v2/projects/<id>`.
+
+  # The changed-line `cs-coverage check` gate is deliberately not wired
+  # in yet: CodeScene rejects `cs-coverage check` for any project whose
+  # coverage-gates configuration is absent ("Lacks the gates
+  # configuration."), which is a CodeScene-side, per-project setting
+  # rather than a CI defect. Once this repo is onboarded to CodeScene
+  # — set the `codescene_project_id` copier answer — and coverage-main.yml
+  # has uploaded to main at least once, add a `mode: check` step guarded
+  # on `CS_ACCESS_TOKEN != ''` with the project's
+  # `project-url: https://api.codescene.io/v2/projects/<id>`.
 
   # The supported interpreters, with the real pinned nose binary installed
   # through the command's own explicit `install` operation.
